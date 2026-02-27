@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package stylist;
+
+option java_multiple_files = true;
+option java_package = "stylist";
+option java_outer_classname = "StylistProto";
+
+// Full pipeline request: image bytes, filename, and optional occasions string.
+message FullPipelineRequest {
+  bytes image = 1;
+  string filename = 2;
+  string occasions = 3;
+}
+
+// Progress update (percent 0-100 and optional message).
+message Progress {
+  int32 percent = 1;
+  string message = 2;
+}
+
+// Final result: full JSON response from the pipeline.
+message Result {
+  string result_json = 1;
+}
+
+// Streamed response: either a progress update or the final result.
+message PipelineProgressResponse {
+  oneof payload {
+    Progress progress = 1;
+    Result result = 2;
+  }
+}
+
+service Stylist {
+  // Run full pipeline (analyze → suggest → generate images) and stream progress.
+  rpc RunFullPipeline(FullPipelineRequest) returns (stream PipelineProgressResponse);
+}

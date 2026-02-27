@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+# *.py[cod]
+# *$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# MacOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Project Specific
+backend/uploads/
+backend/outputs/
+backend/outfit_previews/
+backend/generated/
+backend/proto/   # Usually you keep proto but some prefer not to push generated code
+
+# Dataset (if large)
+backend/data/
+backend/polyvore-dataset/
+backend/polyvore_converted.json

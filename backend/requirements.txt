@@ -1,0 +1,35 @@
+# Core
+ollama
+pillow
+pandas
+pyarrow
+
+# Image Generation
+diffusers
+transformers
+accelerate
+sentencepiece
+torch
+google-generativeai
+
+# Utilities
+numpy
+requests
+
+# FastAPI
+fastapi
+uvicorn
+python-multipart
+
+# CORS & extras
+fastapi[standard]
+uvicorn[standard]
+
+# Database
+SQLAlchemy
+psycopg2-binary
+
+# gRPC
+grpcio
+grpcio-tools
+protobuf
