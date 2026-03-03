@@ -1,33 +1,31 @@
-import json
-import re
+"""RAG retriever: keyword-based similarity search over the Polyvore outfit database."""
 
-def load_outfit_db(path: str = "polyvore_converted.json") -> list:
+import json
+
+
+def load_outfit_db(path: str) -> list:
     with open(path) as f:
         return json.load(f)
 
 
 def score_outfit(outfit: dict, item: dict) -> float:
-    """Simple keyword-based similarity score between item and outfit."""
+    """Keyword-based similarity score between a wardrobe item and a reference outfit."""
     score = 0.0
     outfit_text = json.dumps(outfit).lower()
 
-    # Match item type
     item_type = item.get("item_type", "").lower()
     for word in item_type.split():
         if word in outfit_text:
             score += 2.0
 
-    # Match color
     primary_color = item.get("color", {}).get("primary", "").lower()
     if primary_color and primary_color in outfit_text:
         score += 1.5
 
-    # Match style
     style = item.get("style_category", "").lower()
     if style and style in outfit_text:
         score += 1.0
 
-    # Match season
     season = item.get("season", "").lower()
     if season and season in outfit_text:
         score += 0.5
@@ -48,7 +46,6 @@ def format_for_prompt(similar_outfits: list) -> str:
         items = outfit.get("items", {})
         for category, item_list in items.items():
             if item_list:
-                # items are plain strings, not dicts
                 names = ", ".join(item_list[:2])
                 lines.append(f"  {category}: {names}")
         lines.append("")

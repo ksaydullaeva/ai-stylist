@@ -1,15 +1,9 @@
-import os
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from core.config import settings
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://postgres:Xurwida31!@localhost:5432/styleai",
-)
-
-engine = create_engine(DATABASE_URL, future=True)
+engine = create_engine(settings.DATABASE_URL, future=True)
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -18,4 +12,3 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-

@@ -1,12 +1,43 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import Base, engine
-from models import Outfit, OutfitImage, OutfitItem  # ensure models are registered
-from routers import api_router, health_router
+from core.database import Base, engine
+from models.orm import Outfit, OutfitItem  # noqa: F401 — registers ORM models
+from api import health_router, v1_router
+from services.pipeline import get_image_generator
+
+logger = logging.getLogger("uvicorn.error")
 
 
-app = FastAPI(title="StyleAI API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create database tables on startup; preload image generator in background."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.warning(
+            "Database not available: %s. "
+            "Create the DB with: createdb styleai  (or set DATABASE_URL env var)",
+            e,
+        )
+
+    async def preload_generator() -> None:
+        await asyncio.to_thread(get_image_generator)
+        logger.info("Image generator loaded")
+
+    # Start preload in background so the server becomes ready immediately (fixes
+    # Docker 502 while nginx waits). Only one thread creates the generator (lock in
+    # get_image_generator); first request may wait on that if it runs before preload
+    # finishes.
+    app.state.generator_preload_task = asyncio.create_task(preload_generator())
+    logger.info("Image generator preload started in background")
+    yield
+
+app = FastAPI(title="StyleAI API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,19 +46,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-def on_startup() -> None:
-    """Create database tables on startup (simple auto-migration)."""
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        import logging
-        logging.getLogger("uvicorn.error").warning(
-            "Database not available: %s. Create the DB with: createdb styleai (or set DATABASE_URL)", e
-        )
-
-
-# ── Routers ───────────────────────────────────────────────────────
 app.include_router(health_router)
-app.include_router(api_router)
+app.include_router(v1_router)

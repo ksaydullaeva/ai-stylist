@@ -191,6 +191,51 @@
   pointer-events: none;
 }
 
+/* Optional user photo for context-aware recommendations */
+.userPhotoSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 360px;
+}
+
+.userPhotoSection .label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.userPhotoHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 360px;
+}
+
+.userPhotoRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.userPhotoDropZone {
+  min-width: 100px;
+  min-height: 100px;
+  max-width: 120px;
+  max-height: 120px;
+}
+
+.userPhotoDropZone .previewImg {
+  max-height: 100px;
+  object-fit: cover;
+}
+
+.button.small {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+}
+
 .label {
   display: flex;
   flex-direction: column;
@@ -349,7 +394,7 @@
   color: var(--accent-dim);
 }
 
-.flatlayItemsRow {
+.outfitItemsRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;

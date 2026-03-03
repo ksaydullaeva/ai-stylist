@@ -17,7 +17,6 @@ env/
 
 # Project Specific
 backend/uploads/
-backend/outputs/
 backend/outfit_previews/
 backend/generated/
 backend/proto/   # Usually you keep proto but some prefer not to push generated code

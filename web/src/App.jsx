@@ -25,6 +25,8 @@ const LOADING_PHRASES = [
 export default function App() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
+  const [userPhoto, setUserPhoto] = useState(null)
+  const [userPhotoPreview, setUserPhotoPreview] = useState(null)
   const [occasions, setOccasions] = useState(DEFAULT_OCCASIONS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -64,6 +66,21 @@ export default function App() {
     reader.readAsDataURL(f)
   }
 
+  const onUserPhotoChange = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setUserPhoto(f)
+    setError(null)
+    const reader = new FileReader()
+    reader.onload = () => setUserPhotoPreview(reader.result)
+    reader.readAsDataURL(f)
+  }
+
+  const clearUserPhoto = () => {
+    setUserPhoto(null)
+    setUserPhotoPreview(null)
+  }
+
   const runPipeline = async () => {
     if (!file) {
       setError('Please select an image first.')
@@ -77,7 +94,7 @@ export default function App() {
       const data = await api.fullPipelineStream(file, occasions, (percent) => {
         setProgress(percent)
         setLoadingPhraseIndex((i) => (i + 1) % LOADING_PHRASES.length)
-      })
+      }, userPhoto || null)
       setResult(data)
     } catch (err) {
       setError(err.message || 'Something went wrong.')
@@ -90,6 +107,8 @@ export default function App() {
   const reset = () => {
     setFile(null)
     setPreview(null)
+    setUserPhoto(null)
+    setUserPhotoPreview(null)
     setResult(null)
     setError(null)
     setSelectedItem(null)
@@ -99,10 +118,10 @@ export default function App() {
     <div className="app">
       <header className="header">
         <h1 className="title">Your Personal AI Stylist</h1>
-        <p className="tagline">Upload a clothing item — get outfit suggestions and flat lay previews</p>
+        <p className="tagline">Upload a clothing item — get complete outfit suggestions</p>
         {backendOk === false && (
           <div className="banner error">
-            Backend not reachable. Start it with: <code>cd backend && uvicorn main:app --reload</code>
+            Backend not reachable. Start it with: <code>cd backend && source venv/bin/activate && uvicorn main:app --reload</code>
           </div>
         )}
         {backendOk === null && (
@@ -152,6 +171,37 @@ export default function App() {
               ) : (
                 <span className="dropText">Drop an image here or click to choose</span>
               )}
+            </div>
+            <div className="userPhotoSection">
+              <span className="label">Add a photo of yourself (optional)</span>
+              <p className="userPhotoHint">We’ll use it to suggest colors and styles that suit your skin tone, hair, and look.</p>
+              <div className="userPhotoRow">
+                <div
+                  className={`dropZone userPhotoDropZone ${userPhotoPreview ? 'hasPreview' : ''}`}
+                  onClick={() => document.getElementById('userPhotoInput').click()}
+                >
+                  <input
+                    id="userPhotoInput"
+                    type="file"
+                    accept="image/*"
+                    onChange={onUserPhotoChange}
+                    className="hiddenInput"
+                  />
+                  {userPhotoPreview ? (
+                    <div className="previewWrap">
+                      <img src={userPhotoPreview} alt="You" className="previewImg" />
+                      <span className="changeText">Change photo</span>
+                    </div>
+                  ) : (
+                    <span className="dropText">Your photo</span>
+                  )}
+                </div>
+                {userPhoto && (
+                  <button type="button" className="button secondary small" onClick={clearUserPhoto}>
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
             <label className="label">
               Occasions (comma-separated, or leave blank to auto-detect from image)
@@ -211,7 +261,7 @@ export default function App() {
                           </>
                         )}
                         {items.length > 0 && (
-                          <div className="flatlayItemsRow">
+                          <div className="outfitItemsRow">
                             {items.map((item, j) => {
                               const active = isSelected && selectedItem?.itemIndex === j
                               const label = [item.color, item.type].filter(Boolean).join(' ') || item.category || 'Item'

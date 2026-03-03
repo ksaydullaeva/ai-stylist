@@ -12,11 +12,11 @@ export const api = {
     return res.json();
   },
 
-  /** POST /api/analyze — upload image, get item attributes */
+  /** POST /api/v1/analyze — upload image, get item attributes */
   async analyze(file) {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${getBase()}/api/analyze`, { method: 'POST', body: form });
+    const res = await fetch(`${getBase()}/api/v1/analyze`, { method: 'POST', body: form });
     if (!res.ok) {
       const err = await res.text();
       throw new Error(err || 'Analysis failed');
@@ -24,9 +24,9 @@ export const api = {
     return res.json();
   },
 
-  /** POST /api/outfit-suggestions — get outfit suggestions from attributes */
+  /** POST /api/v1/outfit-suggestions — get outfit suggestions from attributes */
   async getOutfitSuggestions(itemAttributes, occasions = ['casual', 'smart-casual']) {
-    const res = await fetch(`${getBase()}/api/outfit-suggestions`, {
+    const res = await fetch(`${getBase()}/api/v1/outfit-suggestions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ item_attributes: itemAttributes, occasions }),
@@ -38,12 +38,13 @@ export const api = {
     return res.json();
   },
 
-  /** POST /api/full-pipeline — analyze + suggest + generate all flatlays in one shot */
-  async fullPipeline(file, occasions = 'casual,smart-casual,date night') {
+  /** POST /api/v1/full-pipeline — analyze + suggest + generate item images in one shot. userPhoto optional. */
+  async fullPipeline(file, occasions = 'casual,smart-casual,date night', userPhoto = null) {
     const form = new FormData();
     form.append('file', file);
     form.append('occasions', occasions);
-    const res = await fetch(`${getBase()}/api/full-pipeline`, { method: 'POST', body: form });
+    if (userPhoto && userPhoto instanceof File) form.append('user_photo', userPhoto);
+    const res = await fetch(`${getBase()}/api/v1/full-pipeline`, { method: 'POST', body: form });
     if (!res.ok) {
       const text = await res.text();
       try {
@@ -58,14 +59,18 @@ export const api = {
   },
 
   /**
-   * POST /api/full-pipeline-stream — analyze + suggest + generate, streams NDJSON progress.
+   * POST /api/v1/full-pipeline-stream — analyze + suggest + generate item images, streams NDJSON progress.
    * onProgress(percent, message) is called for each progress event; resolves with result data.
+   * userPhoto: optional File for context-aware suggestions (skin tone, hairstyle, etc.).
    */
-  async fullPipelineStream(file, occasions = 'casual,smart-casual,date night', onProgress) {
+  async fullPipelineStream(file, occasions = 'casual,smart-casual,date night', onProgress, userPhoto = null) {
     const form = new FormData();
     form.append('file', file);
     form.append('occasions', occasions ?? '');
-    const res = await fetch(`${getBase()}/api/full-pipeline-stream`, { method: 'POST', body: form });
+    if (userPhoto && userPhoto instanceof File) {
+      form.append('user_photo', userPhoto);
+    }
+    const res = await fetch(`${getBase()}/api/v1/full-pipeline-stream`, { method: 'POST', body: form });
     if (!res.ok) {
       const text = await res.text();
       try {
@@ -115,9 +120,9 @@ export const api = {
     throw new Error('Pipeline did not return a result');
   },
 
-  /** Full URL for an image served by GET /api/image/{filename} */
+  /** Full URL for an image served by GET /api/v1/images/{filename} */
   imageUrl(pathOrFilename) {
-    const path = pathOrFilename.startsWith('/') ? pathOrFilename : `/api/image/${pathOrFilename}`;
+    const path = pathOrFilename.startsWith('/') ? pathOrFilename : `/api/v1/images/${pathOrFilename}`;
     return `${getBase()}${path}`;
   },
 };
