@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.database import Base, engine
 from models.orm import Outfit, OutfitItem  # noqa: F401 — registers ORM models
 from api import health_router, v1_router
-from services.pipeline import get_image_generator
+# from services.pipeline import get_image_generator
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -25,16 +25,16 @@ async def lifespan(app: FastAPI):
             e,
         )
 
-    async def preload_generator() -> None:
-        await asyncio.to_thread(get_image_generator)
-        logger.info("Image generator loaded")
+    # async def preload_generator() -> None:
+    #     await asyncio.to_thread(get_image_generator)
+    #     logger.info("Image generator loaded")
 
     # Start preload in background so the server becomes ready immediately (fixes
     # Docker 502 while nginx waits). Only one thread creates the generator (lock in
     # get_image_generator); first request may wait on that if it runs before preload
     # finishes.
-    app.state.generator_preload_task = asyncio.create_task(preload_generator())
-    logger.info("Image generator preload started in background")
+    # app.state.generator_preload_task = asyncio.create_task(preload_generator())
+    # logger.info("Image generator preload started in background")
     yield
 
 app = FastAPI(title="StyleAI API", lifespan=lifespan)
