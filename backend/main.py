@@ -33,9 +33,14 @@ async def lifespan(app: FastAPI):
     # Docker 502 while nginx waits). Only one thread creates the generator (lock in
     # get_image_generator); first request may wait on that if it runs before preload
     # finishes.
-    app.state.generator_preload_task = asyncio.create_task(preload_generator())
+    task = asyncio.create_task(preload_generator())
+    app.state.generator_preload_task = task
     logger.info("Image generator preload started in background")
     yield
+    if not task.done():
+        logger.warning("Generator preload never finished!")
+    elif task.exception():
+        logger.error("Generator preload failed: %s", task.exception())
 
 app = FastAPI(title="StyleAI API", lifespan=lifespan)
 

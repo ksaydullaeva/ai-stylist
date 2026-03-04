@@ -60,16 +60,15 @@ class OutfitImageGenerator:
             torch_dtype=dtype,
             variant="fp16",
             use_safetensors=True,
+            low_cpu_mem_usage=True
         ).to(device)
 
         # Load fashion LoRA (covers both UNet and text-encoder weights).
         self.pipe.load_lora_weights(LORA_MODEL)
         self.pipe.fuse_lora()
 
-        # Recommended for MPS: reduce peak memory usage.
-        if device == "mps":
-            self.pipe.enable_attention_slicing()
-
+        self.pipe.enable_attention_slicing()
+    
         self.device = device
         print("sdxl-fashion ready")
 

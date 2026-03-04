@@ -1,6 +1,7 @@
 # StyleAI stack: Postgres + FastAPI backend + Vite frontend (nginx).
 # Optional: set GOOGLE_API_KEY in .env for Gemini image generation.
-# For analyze/suggestions, run Ollama on the host (qwen2.5vl:3b, qwen2.5:3b) or add an ollama service.
+# Backend uses Ollama on the HOST (not in Docker). Run on host: OLLAMA_HOST=0.0.0.0 ollama serve
+# and pull models: ollama pull qwen2.5vl:3b && ollama pull qwen2.5:3b
 # From repo root: docker compose up --build
 services:
   db:
@@ -23,11 +24,15 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/styleai
+      OLLAMA_HOST: http://host.docker.internal:11434
+      HF_TOKEN: ${HF_TOKEN:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       VISION_MODEL: ${VISION_MODEL:-qwen2.5vl:3b}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
+      - "8005:8000"
     volumes:
       - backend_uploads:/app/uploads
       - backend_outputs:/app/outputs
