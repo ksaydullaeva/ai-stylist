@@ -125,4 +125,33 @@ export const api = {
     const path = pathOrFilename.startsWith('/') ? pathOrFilename : `/api/v1/images/${pathOrFilename}`;
     return `${getBase()}${path}`;
   },
+
+  /**
+   * POST /api/v1/try-on — generate image of person wearing the outfit (Gemini 2.5 Flash).
+   * userPhoto: File (image of the person).
+   * outfit: { items: [{ type, color, image_url }], style_title? } — same shape as pipeline result outfit.
+   * garmentImage: optional File — source garment = the initial clothing item image the user sent
+   *   (with their optional self image) at the start; improves try-on by including the actual piece.
+   * Returns { try_on_url: "/api/v1/images/xxx.jpg" }.
+   */
+  async tryOn(userPhoto, outfit, garmentImage = null) {
+    const form = new FormData();
+    form.append('user_photo', userPhoto);
+    form.append('outfit', JSON.stringify(outfit));
+    if (garmentImage && garmentImage instanceof File) {
+      form.append('garment_image', garmentImage);
+    }
+    const res = await fetch(`${getBase()}/api/v1/try-on`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const text = await res.text();
+      try {
+        const j = JSON.parse(text);
+        throw new Error(j.detail || text || 'Try-on failed');
+      } catch (e) {
+        if (e instanceof Error && e.message !== text) throw e;
+        throw new Error(text || 'Try-on failed');
+      }
+    }
+    return res.json();
+  },
 };

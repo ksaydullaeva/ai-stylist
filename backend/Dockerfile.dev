@@ -1,0 +1,24 @@
+# Use standard Python 3.12 (Slim is faster for dev)
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies for psycopg2 and development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+COPY requirements.txt .
+# Note: For Mac dev, use the standard CPU version of torch
+RUN pip install --no-cache-dir -r requirements.txt
+
+# In dev, we don't COPY the code here; we mount it via Compose.
+# This ensures hot-reloading works.
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
+
+# Run with --reload for development
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

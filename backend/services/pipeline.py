@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from core.config import settings
-from research.image_generator_sdxl_lightning import OutfitImageGenerator
+from ai.image_generator import OutfitImageGenerator
 
 UPLOAD_DIR: Path = settings.UPLOAD_DIR
 OUTPUT_DIR: Path = settings.OUTPUT_DIR
