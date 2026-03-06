@@ -22,20 +22,28 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/styleai
-      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_HOST: http://ollama-stylist:11434 # to connect to external ollama, use http://host.docker.internal:11434
       HF_TOKEN: ${HF_TOKEN:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       VISION_MODEL: ${VISION_MODEL:-qwen2.5vl:3b}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
     ports:
-      - "8005:8000"
+      - "8001:8000"
     volumes:
       - backend_uploads:/app/uploads
       - backend_outputs:/app/outputs
+      - ./backend/polyvore_converted.json:/app/polyvore_converted.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -48,6 +56,26 @@ services:
       - "3000:80"
     depends_on:
       - backend
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama-stylist
+    ports:
+      - "11436:11434"
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=0        # CRITICAL: Unloads model from RAM immediately after chat
+      - OLLAMA_MAX_LOADED_MODELS=1 # Prevents both Qwen models from being loaded at once
+      - OLLAMA_NUM_PARALLEL=1      # Limits memory used for "thinking" buffers
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 16G
 
 volumes:
   postgres_data:
