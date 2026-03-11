@@ -24,6 +24,16 @@ export const api = {
     return res.json();
   },
 
+  /** POST /api/v1/validate-images — check item is garment, user_photo is full-body person */
+  async validateImages(itemFile, userPhotoFile) {
+    const form = new FormData();
+    form.append('item', itemFile);
+    form.append('user_photo', userPhotoFile);
+    const res = await fetch(`${getBase()}/api/v1/validate-images`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error('Validation failed');
+    return res.json();
+  },
+
   /** POST /api/v1/outfit-suggestions — get outfit suggestions from attributes */
   async getOutfitSuggestions(itemAttributes, occasions = ['casual', 'smart-casual']) {
     const res = await fetch(`${getBase()}/api/v1/outfit-suggestions`, {
@@ -47,13 +57,16 @@ export const api = {
     const res = await fetch(`${getBase()}/api/v1/full-pipeline`, { method: 'POST', body: form });
     if (!res.ok) {
       const text = await res.text();
+      let message = `Server error (${res.status}).`;
       try {
         const j = JSON.parse(text);
-        throw new Error(j.detail || text || 'Pipeline failed');
-      } catch (e) {
-        if (e instanceof Error && e.message !== text) throw e;
-        throw new Error(text || 'Pipeline failed');
+        message = j.detail || message;
+      } catch {
+        if (text.startsWith('<')) {
+          message = `Server error (${res.status}). Backend may be unavailable or returned an error page.`;
+        } else if (text && text.length <= 300) message = text;
       }
+      throw new Error(message);
     }
     return res.json();
   },
@@ -73,17 +86,23 @@ export const api = {
     const res = await fetch(`${getBase()}/api/v1/full-pipeline-stream`, { method: 'POST', body: form });
     if (!res.ok) {
       const text = await res.text();
+      let message = `Server error (${res.status}).`;
       try {
         const j = JSON.parse(text);
-        throw new Error(j.detail || text || 'Pipeline failed');
-      } catch (e) {
-        if (e instanceof Error && e.message !== text) throw e;
-        throw new Error(text || 'Pipeline failed');
+        message = j.detail || message;
+      } catch {
+        if (text.startsWith('<')) {
+          message = `Server error (${res.status}). Backend may be unavailable or returned an error page.`;
+        } else if (text && text.length <= 300) {
+          message = text;
+        }
       }
+      throw new Error(message);
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let firstLine = true;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -93,6 +112,10 @@ export const api = {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
+        if (firstLine && trimmed.startsWith('<')) {
+          throw new Error('Server returned an error page instead of data. Backend may be down or misconfigured.');
+        }
+        firstLine = false;
         let obj;
         try {
           obj = JSON.parse(trimmed);
@@ -120,9 +143,23 @@ export const api = {
     throw new Error('Pipeline did not return a result');
   },
 
-  /** Full URL for an image served by GET /api/v1/images/{filename} */
+  /** Full URL for an image served by /outputs/{filename} */
   imageUrl(pathOrFilename) {
-    const path = pathOrFilename.startsWith('/') ? pathOrFilename : `/api/v1/images/${pathOrFilename}`;
+    if (!pathOrFilename) return '';
+    // If it's already a full URL, return it
+    if (pathOrFilename.startsWith('http')) return pathOrFilename;
+    // Prepend /outputs/ if it's just a filename or path that doesn't have it
+    let path = pathOrFilename;
+    if (!path.startsWith('/')) {
+      path = `/outputs/${path}`;
+    } else if (!path.startsWith('/outputs/') && !path.startsWith('/uploads/')) {
+      // If it starts with /api/v1/images/, we still handle it for legacy DB records
+      if (path.startsWith('/api/v1/images/')) {
+        path = path.replace('/api/v1/images/', '/outputs/');
+      } else {
+        path = `/outputs${path}`;
+      }
+    }
     return `${getBase()}${path}`;
   },
 
@@ -132,26 +169,84 @@ export const api = {
    * outfit: { items: [{ type, color, image_url }], style_title? } — same shape as pipeline result outfit.
    * garmentImage: optional File — source garment = the initial clothing item image the user sent
    *   (with their optional self image) at the start; improves try-on by including the actual piece.
-   * Returns { try_on_url: "/api/v1/images/xxx.jpg" }.
+   * outfitId: optional number — DB outfit ID to save the try-on image for later reference.
+   * Returns { try_on_url: "/outputs/xxx.jpg" }.
    */
-  async tryOn(userPhoto, outfit, garmentImage = null) {
+  async tryOn(userPhoto, outfit, garmentImage = null, outfitId = null) {
     const form = new FormData();
     form.append('user_photo', userPhoto);
     form.append('outfit', JSON.stringify(outfit));
     if (garmentImage && garmentImage instanceof File) {
       form.append('garment_image', garmentImage);
     }
+    if (outfitId != null && typeof outfitId === 'number') {
+      form.append('outfit_id', String(outfitId));
+    }
     const res = await fetch(`${getBase()}/api/v1/try-on`, { method: 'POST', body: form });
     if (!res.ok) {
       const text = await res.text();
+      let message = `Server error (${res.status}).`;
       try {
         const j = JSON.parse(text);
-        throw new Error(j.detail || text || 'Try-on failed');
-      } catch (e) {
-        if (e instanceof Error && e.message !== text) throw e;
-        throw new Error(text || 'Try-on failed');
+        message = j.detail || message;
+      } catch {
+        if (text.startsWith('<')) {
+          message = `Server error (${res.status}). Backend may be unavailable or returned an error page.`;
+        } else if (text && text.length <= 300) message = text;
       }
+      throw new Error(message);
     }
     return res.json();
+  },
+
+  /** GET /api/v1/outfits — list all saved outfits (lookbooks) for later reference */
+  async getSavedOutfits(limit = 50) {
+    const res = await fetch(`${getBase()}/api/v1/outfits?limit=${limit}`);
+    if (!res.ok) throw new Error('Failed to load saved outfits');
+    return res.json();
+  },
+
+  async deleteOutfit(id) {
+    const res = await fetch(`${getBase()}/api/v1/outfits/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'Failed to delete outfit');
+    }
+    return res.json();
+  },
+
+  /**
+   * POST /api/v1/load-demo — load test outfits with placeholder images (no Gemini).
+   * Returns same shape as full-pipeline for testing lookbook, try-on, past lookbooks without using tokens.
+   */
+  async loadDemo() {
+    const res = await fetch(`${getBase()}/api/v1/load-demo`, { method: 'POST' });
+    if (!res.ok) {
+      const text = await res.text();
+      let message = `Demo failed (${res.status}).`;
+      try {
+        const j = JSON.parse(text);
+        message = j.detail || message;
+      } catch {
+        if (text && text.length <= 300) message = text;
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async deleteAllOutfits() {
+    try {
+      const resp = await fetch(`${getBase()}/api/v1/outfits`, {
+        method: 'DELETE',
+      })
+      if (!resp.ok) throw new Error('Delete all failed')
+      return await resp.json()
+    } catch (err) {
+      console.error(err)
+      throw err
+    }
   },
 };

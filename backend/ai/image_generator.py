@@ -4,6 +4,7 @@ Generates per-item studio product photos for each outfit.
 Supports virtual try-on: person photo + outfit items → person wearing the outfit.
 """
 
+import io
 import os
 import re
 import time
@@ -12,6 +13,7 @@ import uuid
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
+from PIL import Image
 
 from core.config import settings
 from utils.images import resize_and_compress
@@ -171,13 +173,33 @@ class OutfitImageGenerator:
 
         return {"individual_items": individual_items}
 
-    def _image_part(self, image_path: str) -> dict:
-        """Build an inline_data part for Gemini from a file path."""
+    def _image_to_jpeg_bytes(self, image_path: str) -> bytes:
+        """Load image from path (any PIL-supported format), convert to RGB, return JPEG bytes.
+        Ensures Gemini always receives valid image/jpeg and avoids 'unknown format' errors
+        for WebP, HEIC, etc. that were previously mislabeled as PNG."""
         p = Path(image_path)
         if not p.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
-        mime = "image/jpeg" if p.suffix.lower() in (".jpg", ".jpeg") else "image/png"
-        return {"inline_data": {"mime_type": mime, "data": p.read_bytes()}}
+        try:
+            img = Image.open(p)
+        except Exception as e:
+            raise ValueError(
+                f"Unsupported or corrupt image format ({p.suffix or 'unknown'}). "
+                "Please use JPEG or PNG."
+            ) from e
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=90, optimize=True)
+        return buf.getvalue()
+
+    def _image_part(self, image_path: str) -> dict:
+        """Build an inline_data part for Gemini from a file path. Normalizes to JPEG so
+        Gemini never receives mislabeled or unsupported formats (e.g. WebP sent as PNG)."""
+        data = self._image_to_jpeg_bytes(image_path)
+        return {"inline_data": {"mime_type": "image/jpeg", "data": data}}
 
     def try_on(
         self,
@@ -217,20 +239,28 @@ class OutfitImageGenerator:
         if source_garment_path and Path(source_garment_path).exists():
             prompt = (
                 "Generate a single photorealistic IMAGE of this person wearing this outfit. "
-                "First image is the person. Second image is the actual garment the user owns (their uploaded item). "
-                "The following image(s) are other outfit items. "
+                "First image is the person (full body). Second image is the anchor garment the user owns. "
+                "The following image(s) are other suggested outfit items. "
+                "CRITICAL: Keep every clothing item exactly as in the reference images — same colors, same texture, "
+                "same design and style. Do not alter the anchor item or the suggested items. "
+                "Remove the background from the person: show the person on a clean, plain neutral background "
+                "(e.g. white, light gray, or simple studio backdrop). Do not keep the person's original background "
+                "and do not add a new scenic or decorative background. "
                 f"Outfit: {outfit_description}. "
-                "Show the person wearing these clothes naturally, with the user's own garment clearly included: "
-                "same pose and body type, realistic fit and lighting. Preserve the person's face and skin. "
+                "Same pose and body type, realistic fit and lighting. Preserve the person's face and skin. "
                 "Return only the image, no text."
             )
         else:
             prompt = (
                 "Generate a single photorealistic IMAGE of this person wearing this outfit. "
-                "First image is the person. The following images are clothing items from the outfit. "
+                "First image is the person (full body). The following images are clothing items from the outfit. "
+                "CRITICAL: Keep every clothing item exactly as in the reference images — same colors, same texture, "
+                "same design and style. Do not alter any item. "
+                "Remove the background from the person: show the person on a clean, plain neutral background "
+                "(e.g. white, light gray, or simple studio backdrop). Do not keep the person's original background "
+                "and do not add a new scenic or decorative background. "
                 f"Outfit: {outfit_description}. "
-                "Show the person wearing these clothes naturally: same pose and body type, "
-                "realistic fit and lighting. Preserve the person's face and skin. "
+                "Same pose and body type, realistic fit and lighting. Preserve the person's face and skin. "
                 "Return only the image, no text."
             )
         content_parts.append(prompt)

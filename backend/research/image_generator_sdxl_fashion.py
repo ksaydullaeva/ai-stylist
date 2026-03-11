@@ -13,6 +13,7 @@
 #   - The model is already fashion-focused so prompts don't need heavy style keywords.
 #   - Text-encoder LoRA was enabled during training (loaded automatically via load_lora_weights).
 
+import gc
 import os
 import time
 import uuid
@@ -44,33 +45,47 @@ class OutfitImageGenerator:
 
     The LoRA was trained on wbensvage/clothes_desc, so prompts in the form
     "a photo of <color> <garment-type> …" work well out of the box.
+
+    Pipeline is loaded on first use and unloaded after each request to save memory.
     """
 
     def __init__(self) -> None:
-        device = _get_device()
-        print(f"Loading sdxl-fashion pipeline on {device} …")
+        self.device = _get_device()
+        self.pipe = None
 
-        # The special VAE must match what was used during LoRA training.
+    def _ensure_loaded(self) -> None:
+        """Load pipeline and LoRA if not already loaded (lazy load for memory)."""
+        if self.pipe is not None:
+            return
+        print(f"Loading sdxl-fashion pipeline on {self.device} …")
         dtype = torch.float16
         vae = AutoencoderKL.from_pretrained(VAE_MODEL, torch_dtype=dtype)
-
         self.pipe = StableDiffusionXLPipeline.from_pretrained(
             BASE_MODEL,
             vae=vae,
             torch_dtype=dtype,
             variant="fp16",
             use_safetensors=True,
-            low_cpu_mem_usage=True
-        ).to(device)
-
-        # Load fashion LoRA (covers both UNet and text-encoder weights).
+            low_cpu_mem_usage=True,
+        ).to(self.device)
         self.pipe.load_lora_weights(LORA_MODEL)
         self.pipe.fuse_lora()
-
         self.pipe.enable_attention_slicing()
-    
-        self.device = device
         print("sdxl-fashion ready")
+
+    def unload(self) -> None:
+        """Unload pipeline and free GPU/device memory. Call after request is done."""
+        if self.pipe is None:
+            return
+        print("Unloading sdxl-fashion pipeline …")
+        del self.pipe
+        self.pipe = None
+        gc.collect()
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+        elif self.device == "mps" and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
+        print("sdxl-fashion unloaded")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -124,22 +139,14 @@ class OutfitImageGenerator:
     # Public API  (matches the interface used by services/pipeline.py)
     # ------------------------------------------------------------------
 
-    def generate_full_suite(
+    def _generate_full_suite_impl(
         self,
         outfit_data: dict,
         outfit_index: int = 0,
         output_dir: str = "outfits",
         source_image_path: str | None = None,
     ) -> dict:
-        """Generate individual item images for one outfit.
-
-        source_image_path is accepted for API compatibility but not used
-        (local text-to-image model — no image conditioning).
-
-        Returns:
-            {"individual_items": [saved_path, ...]}
-        """
-        os.makedirs(output_dir, exist_ok=True)
+        """Inner implementation: generate one outfit's item images (pipe must be loaded)."""
         outfit    = outfit_data.get("outfits", [])[outfit_index]
         items     = outfit.get("items", [])
         gender    = outfit_data.get("gender_context", "")
@@ -158,6 +165,33 @@ class OutfitImageGenerator:
 
         return {"individual_items": individual_items}
 
+    def generate_full_suite(
+        self,
+        outfit_data: dict,
+        outfit_index: int = 0,
+        output_dir: str = "outfits",
+        source_image_path: str | None = None,
+    ) -> dict:
+        """Generate individual item images for one outfit.
+
+        source_image_path is accepted for API compatibility but not used
+        (local text-to-image model — no image conditioning).
+
+        Returns:
+            {"individual_items": [saved_path, ...]}
+        """
+        self._ensure_loaded()
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+            return self._generate_full_suite_impl(
+                outfit_data,
+                outfit_index=outfit_index,
+                output_dir=output_dir,
+                source_image_path=source_image_path,
+            )
+        finally:
+            self.unload()
+
     def generate_all_outfits(
         self,
         outfit_data: dict,
@@ -169,22 +203,26 @@ class OutfitImageGenerator:
         Returns:
             [{"individual_items": [...]}, ...]
         """
-        os.makedirs(output_dir, exist_ok=True)
-        outfits  = outfit_data.get("outfits", [])
-        t_total  = time.time()
-        results: list[dict] = []
+        self._ensure_loaded()
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+            outfits  = outfit_data.get("outfits", [])
+            t_total  = time.time()
+            results: list[dict] = []
 
-        for i in range(len(outfits)):
-            print(f"\n--- Outfit {i + 1}/{len(outfits)} ---")
-            t0     = time.time()
-            result = self.generate_full_suite(
-                outfit_data,
-                outfit_index=i,
-                output_dir=output_dir,
-                source_image_path=source_image_path,
-            )
-            print(f"Outfit {i + 1} total: {time.time() - t0:.2f}s")
-            results.append(result)
+            for i in range(len(outfits)):
+                print(f"\n--- Outfit {i + 1}/{len(outfits)} ---")
+                t0     = time.time()
+                result = self._generate_full_suite_impl(
+                    outfit_data,
+                    outfit_index=i,
+                    output_dir=output_dir,
+                    source_image_path=source_image_path,
+                )
+                print(f"Outfit {i + 1} total: {time.time() - t0:.2f}s")
+                results.append(result)
 
-        print(f"\nAll outfits total: {time.time() - t_total:.2f}s for {len(outfits)} outfit(s)")
-        return results
+            print(f"\nAll outfits total: {time.time() - t_total:.2f}s for {len(outfits)} outfit(s)")
+            return results
+        finally:
+            self.unload()

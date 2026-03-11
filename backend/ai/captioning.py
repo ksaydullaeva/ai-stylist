@@ -43,7 +43,9 @@ def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
     that the item may be a dark version of another color.
 
     Extract the following details:
-    - item_type
+    - item_type (e.g. jeans, blouse, jacket, sneakers)
+    - category: MUST be exactly one of "top", "bottom", "shoes", "accessory", "outerwear"
+      (top=shirts/blouses/sweaters/tanks; bottom=pants/jeans/skirts/shorts; shoes=footwear; accessory=bag/belt/hat/jewelry; outerwear=jacket/coat/blazer)
     - gender: women or men
     - age_group: must be ONE of these exact values:
         * "kids"       → under 12, small sizing, playful designs, cartoon prints

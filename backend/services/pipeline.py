@@ -51,4 +51,4 @@ def attach_image_urls(outfits: list, image_results: list) -> None:
         item_paths = image_results[idx].get("individual_items") or []
         for j, item in enumerate(outfit.get("items", [])):
             if j < len(item_paths) and item_paths[j]:
-                item["image_url"] = f"/api/v1/images/{Path(item_paths[j]).name}"
+                item["image_url"] = f"/outputs/{Path(item_paths[j]).name}"

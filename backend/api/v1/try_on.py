@@ -10,8 +10,9 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from repositories.outfit import update_outfit_try_on
 from services.pipeline import OUTPUT_DIR, UPLOAD_DIR, get_image_generator
 
 router = APIRouter(tags=["try-on"])
@@ -29,6 +30,7 @@ async def try_on(
     user_photo: UploadFile = File(..., description="Photo of the person (full or upper body)"),
     outfit: str = File(..., description="JSON: { \"items\": [{\"type\", \"color\", \"image_url\"}], \"style_title\"? }"),
     garment_image: UploadFile = File(None, description="Source garment: the initial clothing item image the user sent (with their optional self image)"),
+    outfit_id: int | None = Form(None, description="Optional: DB outfit ID to save try-on image for later reference"),
 ):
     """Generate a try-on image: person wearing the given outfit using Gemini 2.5 Flash.
 
@@ -39,7 +41,7 @@ async def try_on(
     - garment_image: source garment = the initial image of the clothing item the user uploaded at the start
       (the same item they sent with their optional self image). When provided, try-on uses it so the model sees the actual piece.
 
-    Returns: { "try_on_url": "/api/v1/images/<filename>" }
+    Returns: { "try_on_url": "/outputs/<filename>" }
     """
     if not user_photo.filename or not user_photo.content_type or not user_photo.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Please upload an image file as user_photo")
@@ -57,7 +59,7 @@ async def try_on(
     item_paths: list[str] = []
     for it in items:
         url = it.get("image_url") or ""
-        # Allow "/api/v1/images/foo.jpg" or "foo.jpg"
+        # Allow "/outputs/foo.jpg" or "foo.jpg"
         filename = url.split("/")[-1] if "/" in url else url
         if not filename:
             continue
@@ -113,4 +115,8 @@ async def try_on(
     if not result_path:
         raise HTTPException(status_code=502, detail="Try-on image generation failed")
 
-    return {"try_on_url": f"/api/v1/images/{Path(result_path).name}"}
+    try_on_filename = Path(result_path).name
+    if outfit_id is not None:
+        update_outfit_try_on(outfit_id, try_on_filename)
+
+    return {"try_on_url": f"/outputs/{try_on_filename}"}

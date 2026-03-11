@@ -39,6 +39,35 @@ ALWAYS prefer modern alternatives:
 - Bags: shoulder bags, tote bags, mini bags
 """
 
+VALID_CATEGORIES = {"top", "bottom", "shoes", "accessory", "outerwear"}
+
+# Keywords to infer category from item_type when vision model doesn't return category
+CATEGORY_INFER_KEYWORDS = {
+    "top": ("shirt", "blouse", "top", "tee", "tank", "sweater", "hoodie", "cardigan", "tunic", "crop", "turtleneck", "dress", "jumpsuit", "romper"),
+    "bottom": ("pants", "trousers", "jeans", "skirt", "shorts", "leggings", "joggers"),
+    "shoes": ("shoes", "sneakers", "boots", "sandals", "loafers", "heels", "flats", "mules", "pumps", "oxfords"),
+    "accessory": ("bag", "belt", "hat", "scarf", "watch", "jewelry", "necklace", "bracelet", "earrings", "sunglasses"),
+    "outerwear": ("jacket", "coat", "blazer", "vest", "parka", "trench", "bomber"),
+}
+
+
+def _infer_anchor_category(item_attributes: dict) -> str:
+    """Infer the uploaded item's category (top/bottom/shoes/accessory/outerwear)."""
+    raw = item_attributes.get("category")
+    if isinstance(raw, str) and raw.strip().lower() in VALID_CATEGORIES:
+        return raw.strip().lower()
+    if isinstance(raw, list):
+        for c in raw:
+            if isinstance(c, str) and c.strip().lower() in VALID_CATEGORIES:
+                return c.strip().lower()
+    item_type = (item_attributes.get("item_type") or "").lower()
+    if not item_type:
+        return "top"  # safe default so we still suggest bottoms/shoes/etc.
+    for category, keywords in CATEGORY_INFER_KEYWORDS.items():
+        if any(kw in item_type for kw in keywords):
+            return category
+    return "top"
+
 
 @lru_cache(maxsize=1)
 def _get_outfit_db() -> list:
@@ -64,6 +93,7 @@ def generate_outfit_suggestions(
     gender = item_attributes.get("gender", "unisex")
     age_group = item_attributes.get("age_group", "adult")
     season = item_attributes.get("season", "all-season")
+    anchor_category = _infer_anchor_category(item_attributes)
 
     start = time.time()
     similar = retrieve_similar_outfits(item_attributes, _get_outfit_db(), top_k=3)
@@ -78,10 +108,29 @@ def generate_outfit_suggestions(
     - Consider their hairstyle and overall look when choosing accessories and necklines.
     """
 
+    # Build required items: everything EXCEPT the anchor's category (user already has that)
+    required_categories = []
+    if anchor_category != "top":
+        required_categories.append('Exactly 1 top (category="top", e.g. shirt, blouse, sweater — not outerwear)')
+    if anchor_category != "bottom":
+        required_categories.append('Exactly 1 bottom (category="bottom", e.g. pants, skirt, shorts)')
+    if anchor_category != "shoes":
+        required_categories.append('Exactly 1 pair of shoes (category="shoes")')
+    if anchor_category != "accessory":
+        required_categories.append('At least 1 and up to 2 accessories (category="accessory", e.g. bag, belt, jewelry, scarf, hat)')
+    if anchor_category != "outerwear":
+        required_categories.append(f'Optional outerwear (category="outerwear") ONLY if season is {season} and weather requires it')
+    required_bullets = "\n        * ".join(required_categories)
+    min_items = max(3, len([c for c in ["top", "bottom", "shoes"] if c != anchor_category]) + 1)  # at least 3 complements + optional accessory/outerwear
+
     prompt = f"""Here is a clothing item from the user's wardrobe:
 
     {json.dumps(item_attributes, indent=2)}
     {user_context}
+
+    ANCHOR CATEGORY RULE (CRITICAL — DO NOT VIOLATE):
+    - The user's uploaded item is a "{anchor_category}". They already have this piece.
+    - Do NOT suggest ANY item with category="{anchor_category}" in the "items" list. Suggest only items that PAIR WITH the user's item (e.g. if they uploaded pants, suggest tops, shoes, accessories — never more pants).
 
     The user is a {age_group} {gender} person. Generate outfit suggestions accordingly.
     All suggested items must be appropriate for {gender} {age_group} style.
@@ -95,14 +144,11 @@ def generate_outfit_suggestions(
     - Shoes and accessories must match the season: e.g. for fall/winter use boots, loafers, closed-toe shoes; for summer use sandals, espadrilles; for all-season use versatile options.
 
     STRUCTURE RULES (STRICT — DO NOT VIOLATE):
-    - Every outfit MUST include, in its "items" list:
-        * Exactly 1 top  (category="top", e.g. shirt, blouse, sweater — not outerwear)
-        * Exactly 1 bottom (category="bottom", e.g. pants, skirt, shorts)
-        * Exactly 1 pair of shoes (category="shoes")
-        * Exactly 1 or 2 accessories (category="accessory", e.g. bag, belt, jewelry, scarf, hat)
-        * Optional outerwear (category="outerwear") ONLY if season is {season} and weather requires it
+    - Every outfit MUST include, in its "items" list, ONLY complementary categories (never the same type as the user's item):
+        * {required_bullets}
+    - Do NOT include any item with category="{anchor_category}" — the user's uploaded item fills that role.
     - Each entry in "items" MUST be a separate object, never merged.
-    - The "items" array MUST therefore contain at least 4 and at most 6 objects.
+    - The "items" array MUST contain at least {min_items} and at most 6 objects.
     - For each item, include "enrichment": a short, catchy sentence explaining why this piece enriches the look.
 
     BANNED ITEMS (STRICT — DO NOT VIOLATE):
@@ -150,6 +196,10 @@ def generate_outfit_suggestions(
     match = re.search(r"\{.*\}", raw_text, re.DOTALL)
     if match:
         parsed = json.loads(match.group())
+        # Enforce: remove any suggested item with same category as the user's (anchor) item
+        for outfit in parsed.get("outfits", []):
+            items = outfit.get("items") or []
+            outfit["items"] = [it for it in items if (it.get("category") or "").strip().lower() != anchor_category]
         _log_outfit_summary(parsed)
         return parsed
 

@@ -14,9 +14,10 @@ def persist_outfits(
     image_results: list,
     source_filepath: Path,
     attributes: dict,
-) -> None:
-    """Persist outfits and their individual items to the database."""
+) -> list[int]:
+    """Persist outfits and their individual items to the database. Returns list of created outfit IDs."""
     session = SessionLocal()
+    outfit_ids: list[int] = []
     try:
         for idx, outfit in enumerate(outfits):
             db_outfit = Outfit(
@@ -29,6 +30,7 @@ def persist_outfits(
             )
             session.add(db_outfit)
             session.flush()
+            outfit_ids.append(db_outfit.id)
 
             item_paths = (
                 image_results[idx].get("individual_items") or []
@@ -51,5 +53,103 @@ def persist_outfits(
     except Exception as exc:
         session.rollback()
         logger.warning("Could not persist outfits to database: %s", exc)
+        outfit_ids = []
+    finally:
+        session.close()
+    return outfit_ids
+
+
+def update_outfit_try_on(outfit_id: int, try_on_filename: str) -> bool:
+    """Set try_on_image_path for an outfit. Returns True if updated."""
+    session = SessionLocal()
+    try:
+        row = session.query(Outfit).filter(Outfit.id == outfit_id).first()
+        if not row:
+            return False
+        row.try_on_image_path = try_on_filename
+        session.commit()
+        return True
+    except Exception as exc:
+        session.rollback()
+        logger.warning("Could not update outfit try-on: %s", exc)
+        return False
+    finally:
+        session.close()
+
+
+def list_outfits(limit: int = 50) -> list[dict]:
+    """List saved outfits for later reference (most recent first)."""
+    session = SessionLocal()
+    try:
+        rows = (
+            session.query(Outfit)
+            .order_by(Outfit.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        result = []
+        for o in rows:
+            items = [
+                {
+                    "id": i.id,
+                    "category": i.category,
+                    "color": i.color,
+                    "type": i.type,
+                    "description": i.description,
+                    "shopping_keywords": i.shopping_keywords,
+                    "image_url": f"/outputs/{Path(i.image_path).name}" if i.image_path else None,
+                }
+                for i in sorted(o.items, key=lambda x: x.id)
+            ]
+            result.append({
+                "id": o.id,
+                "occasion": o.occasion,
+                "style_title": o.style_title,
+                "style_notes": o.style_notes,
+                "color_palette": o.color_palette or [],
+                "attributes": o.attributes or {},
+                "source_image_url": (
+                    f"/uploads/{Path(o.source_image_path).name}" if "uploads" in o.source_image_path else
+                    f"/outputs/{Path(o.source_image_path).name}" if "outputs" in o.source_image_path else
+                    f"/outputs/{Path(o.source_image_path).name}"  # fallback
+                ) if o.source_image_path else None,
+                "try_on_image_url": f"/outputs/{o.try_on_image_path}" if o.try_on_image_path else None,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "items": items,
+            })
+        return result
+    finally:
+        session.close()
+def delete_outfit(outfit_id: int) -> bool:
+    """Delete an outfit and its items from the database. Returns True if deleted."""
+    session = SessionLocal()
+    try:
+        row = session.query(Outfit).filter(Outfit.id == outfit_id).first()
+        if not row:
+            return False
+        session.delete(row)
+        session.commit()
+        return True
+    except Exception as exc:
+        session.rollback()
+        logger.warning("Could not delete outfit: %s", exc)
+        return False
+    finally:
+        session.close()
+
+def delete_all_outfits() -> bool:
+    """Wipe all saved outfits and their items."""
+    session = SessionLocal()
+    try:
+        from sqlalchemy import text
+        # Clean up any potential ghost tables or items first
+        session.execute(text("DELETE FROM outfit_items"))
+        session.execute(text("DELETE FROM outfit_images")) # Ghost table causing FK violation
+        session.execute(text("DELETE FROM outfits"))
+        session.commit()
+        return True
+    except Exception as exc:
+        session.rollback()
+        raise exc
     finally:
         session.close()

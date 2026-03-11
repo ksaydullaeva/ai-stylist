@@ -69,3 +69,45 @@ Respond ONLY with a valid JSON object. No markdown, no extra text."""
         return {k: v for k, v in parsed.items() if k not in ("error", "message") and v is not None}
     except (json.JSONDecodeError, ValueError):
         return {"raw_output": raw_text}
+
+
+def validate_user_photo_for_tryon(image_path: str) -> Dict[str, Any]:
+    """
+    Check that the image shows a person and full body (for virtual try-on).
+    Returns {"ok": True} or {"error": "no_person"|"not_full_body", "message": "..."}.
+    """
+    image_data = _encode_image(image_path)
+    prompt = """Look at this image. Answer with ONLY a JSON object, nothing else.
+
+1. Does it show a PERSON (human face/body)? If NO (e.g. object, landscape, animal, only clothing), respond:
+   {"error": "no_person", "message": "No person detected. Please upload a photo of yourself."}
+
+2. Does it show the person's FULL BODY (at least from chest/mid-torso down to knees or feet, or head to toe)? If it shows only face, head, bust, or upper body only, respond:
+   {"error": "not_full_body", "message": "Please upload a full-body photo for best try-on results."}
+
+3. If it shows a person with full body visible, respond:
+   {"ok": true}"""
+
+    try:
+        response = ollama.chat(
+            model=settings.VISION_MODEL,
+            options={"num_ctx": 512, "num_predict": 80, "temperature": 0.0},
+            messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+        )
+    except Exception as e:
+        return {"error": "analysis_failed", "message": str(e)}
+
+    raw_text = response["message"]["content"]
+    try:
+        clean_text = re.sub(r"```json|```", "", raw_text).strip()
+        start_idx = clean_text.find("{")
+        if start_idx == -1:
+            return {"error": "invalid_response", "message": "Could not validate image."}
+        parsed, _ = json.JSONDecoder().raw_decode(clean_text[start_idx:])
+        if parsed.get("ok") is True:
+            return {"ok": True}
+        if parsed.get("error") and parsed.get("message"):
+            return {"error": parsed["error"], "message": parsed["message"]}
+        return {"error": "invalid_response", "message": "Please upload a clear full-body photo."}
+    except (json.JSONDecodeError, ValueError):
+        return {"error": "invalid_response", "message": "Could not validate image."}

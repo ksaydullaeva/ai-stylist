@@ -77,11 +77,14 @@ async def full_pipeline(
         )
 
         attach_image_urls(outfits, image_results)
-        persist_outfits(outfits, image_results, filepath, attributes)
+        outfit_ids = persist_outfits(outfits, image_results, filepath, attributes)
+        for i, o in enumerate(outfit_data.get("outfits", [])):
+            if i < len(outfit_ids):
+                o["id"] = outfit_ids[i]
 
         return {
             "success": True,
-            "image_id": filepath.name,
+            "image_id": f"/uploads/{filepath.name}",
             "attributes": attributes,
             "outfits": outfit_data,
         }
@@ -149,14 +152,17 @@ async def _stream_pipeline(
         attach_image_urls(outfits, image_results)
 
         yield emit({"type": "progress", "percent": 95, "message": "Saving…"})
-        await asyncio.to_thread(persist_outfits, outfits, image_results, filepath, attributes)
+        outfit_ids = await asyncio.to_thread(persist_outfits, outfits, image_results, filepath, attributes)
+        for i, o in enumerate(outfit_data.get("outfits", [])):
+            if i < len(outfit_ids):
+                o["id"] = outfit_ids[i]
 
         yield emit({"type": "progress", "percent": 100, "message": "Done"})
         yield emit({
             "type": "result",
             "data": {
                 "success": True,
-                "image_id": filepath.name,
+                "image_id": f"/uploads/{filepath.name}",
                 "attributes": attributes,
                 "outfits": outfit_data,
             },

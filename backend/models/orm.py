@@ -15,6 +15,7 @@ class Outfit(Base):
     color_palette = Column(JSONB)
     source_image_path = Column(String(512))
     attributes = Column(JSONB)
+    try_on_image_path = Column(String(512))  # filename of generated try-on image (e.g. tryon_abc123.jpg)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     items = relationship("OutfitItem", back_populates="outfit", cascade="all, delete-orphan")

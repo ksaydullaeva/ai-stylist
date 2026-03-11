@@ -43,7 +43,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3001:80"
     depends_on:
       - backend
 
