@@ -22,6 +22,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     deploy:
       resources:
         reservations:
@@ -33,7 +35,6 @@ services:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/styleai
       OLLAMA_HOST: http://ollama-stylist:11434 # to connect to external ollama, use http://host.docker.internal:11434
       HF_TOKEN: ${HF_TOKEN:-}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       VISION_MODEL: ${VISION_MODEL:-qwen2.5vl:3b}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
     # extra_hosts:
