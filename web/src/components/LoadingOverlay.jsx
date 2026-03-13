@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-const LOADING_VIDEO_SRC = '/model-moving.mov';
+const LOADING_VIDEO_SRC = '/generated_video.mp4';
 
 export default function LoadingOverlay({ loading, progress }) {
     const videoRef = useRef(null);
@@ -18,20 +18,25 @@ export default function LoadingOverlay({ loading, progress }) {
     return (
         <div className="loading-overlay">
             <div className="loading-container loading-container-with-video">
-                <video
-                    ref={videoRef}
-                    className="loading-video"
-                    src={LOADING_VIDEO_SRC}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    aria-hidden
-                />
-                <div className="progress-bar-wrap" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label="Pipeline progress">
-                    <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                <div className="loading-video-wrap">
+                    <video
+                        ref={videoRef}
+                        className="loading-video"
+                        src={LOADING_VIDEO_SRC}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        aria-hidden
+                    />
+                    <div className="loading-progress-block loading-progress-on-video">
+                        <p className="loading-progress-label">Creating your look</p>
+                        <div className="progress-bar-wrap loading-progress-bar" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label="Pipeline progress">
+                            <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                        </div>
+                        <p className="loading-progress" aria-live="polite">{Math.round(progress)}%</p>
+                    </div>
                 </div>
-                <p className="loading-progress" aria-live="polite">{Math.round(progress)}%</p>
             </div>
         </div>
     );

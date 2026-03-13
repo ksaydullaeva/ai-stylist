@@ -208,6 +208,8 @@ class OutfitImageGenerator:
         outfit_description: str,
         output_path: str,
         source_garment_path: str | None = None,
+        anchor_description: str | None = None,
+        gender: str | None = None,
         max_retries: int = 3,
         base_delay: float = 1.0,
     ) -> str:
@@ -216,14 +218,36 @@ class OutfitImageGenerator:
         Args:
             person_image_path: Path to photo of the person (full body or upper body).
             outfit_item_paths: Paths to generated outfit item images.
-            outfit_description: Short text description of the outfit (e.g. colors and types).
+            outfit_description: Full outfit description (when source garment is used, includes anchor + suggested items).
             output_path: Where to save the generated try-on image.
             source_garment_path: Optional path to the source garment image — the initial clothing item
                 image the user sent (with their optional self image) at the start of the flow.
+            anchor_description: Optional short label for the anchor item (e.g. "beige, black outerwear") for prompt clarity.
+            gender: Optional "men" or "women" for gender-specific default fashion pose.
 
         Returns:
             Path to the saved try-on image, or "" on failure.
         """
+        # Default editorial fashion pose: do NOT copy the person's pose from their photo
+        g = (gender or "").strip().lower() if gender else ""
+        if g == "women":
+            pose_instruction = (
+                "Do NOT use the same pose as in the person's photo. Use a classic editorial fashion pose for women: "
+                "standing full body, confident stance, one hand on hip or relaxed at side, weight on one leg, "
+                "editorial style. Preserve the person's face, body type, and skin exactly. "
+            )
+        elif g == "men":
+            pose_instruction = (
+                "Do NOT use the same pose as in the person's photo. Use a classic editorial fashion pose for men: "
+                "standing full body, confident stance, hands relaxed at sides or one hand in pocket, "
+                "editorial style. Preserve the person's face, body type, and skin exactly. "
+            )
+        else:
+            pose_instruction = (
+                "Do NOT use the same pose as in the person's photo. Use a classic editorial fashion pose: "
+                "standing full body, confident stance, editorial style. Preserve the person's face, body type, and skin exactly. "
+            )
+
         content_parts: list = []
         # 1. Person image first
         content_parts.append(self._image_part(person_image_path))
@@ -237,18 +261,22 @@ class OutfitImageGenerator:
                 content_parts.append(self._image_part(path))
         # 4. Prompt for virtual try-on
         if source_garment_path and Path(source_garment_path).exists():
+            anchor_note = (
+                f" The person MUST be wearing the anchor garment (image 2){f' — {anchor_description}' if anchor_description else ''} in the result; do not omit it."
+            )
             prompt = (
-                "Generate a single photorealistic IMAGE of this person wearing this outfit. "
+                "Generate a single photorealistic IMAGE of this person wearing the COMPLETE outfit. "
                 "First image is the person (full body). Second image is the anchor garment the user owns. "
                 "The following image(s) are other suggested outfit items. "
-                "CRITICAL: Keep every clothing item exactly as in the reference images — same colors, same texture, "
-                "same design and style. Do not alter the anchor item or the suggested items. "
+                "CRITICAL: The output must show the person wearing EVERY item listed below. Include the anchor garment and all suggested pieces; do not skip or omit any item. "
+                "Keep every clothing item exactly as in the reference images — same colors, same texture, same design and style. Do not alter the anchor item or the suggested items. "
+                + anchor_note + " "
                 "Remove the background from the person: show the person on a clean, plain neutral background "
                 "(e.g. white, light gray, or simple studio backdrop). Do not keep the person's original background "
                 "and do not add a new scenic or decorative background. "
-                f"Outfit: {outfit_description}. "
-                "Same pose and body type, realistic fit and lighting. Preserve the person's face and skin. "
-                "Return only the image, no text."
+                f"Full outfit (person must wear all of these): {outfit_description}. "
+                f"{pose_instruction}"
+                "Realistic fit and lighting. Return only the image, no text."
             )
         else:
             prompt = (
@@ -260,8 +288,8 @@ class OutfitImageGenerator:
                 "(e.g. white, light gray, or simple studio backdrop). Do not keep the person's original background "
                 "and do not add a new scenic or decorative background. "
                 f"Outfit: {outfit_description}. "
-                "Same pose and body type, realistic fit and lighting. Preserve the person's face and skin. "
-                "Return only the image, no text."
+                f"{pose_instruction}"
+                "Realistic fit and lighting. Return only the image, no text."
             )
         content_parts.append(prompt)
 

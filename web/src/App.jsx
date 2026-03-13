@@ -32,7 +32,7 @@ export default function App() {
   // Per-outfit try-on result URLs (current session): outfit id or `i-${index}` -> url
   const [outfitTryOnUrls, setOutfitTryOnUrls] = useState({})
 
-  // Past lookbooks (saved outfits for later reference)
+  // Saved looks (user chooses which outfits to save for later reference)
   const [savedOutfitsView, setSavedOutfitsView] = useState(false)
   const [savedOutfits, setSavedOutfits] = useState([])
   const [savedOutfitsLoading, setSavedOutfitsLoading] = useState(false)
@@ -40,7 +40,7 @@ export default function App() {
   // Phase tracking: 0 = Studio, 1 = Lookbook
   const stage = result ? 1 : 0
 
-  // Load saved outfits on mount so we can show recent lookbooks on Studio and Past lookbooks
+  // Load saved looks on mount for the Saved looks page
   useEffect(() => {
     let cancelled = false
     api.getSavedOutfits().then((data) => {
@@ -121,9 +121,15 @@ export default function App() {
     setTryOnResultUrl(null)
 
     try {
+      const outfitPayload = {
+        items: outfit.items ?? [],
+        style_title: outfit.style_title,
+        gender_context: result?.outfits?.gender_context ?? undefined,
+        anchor_item: result?.outfits?.anchor_item ?? undefined,
+      }
       const data = await api.tryOn(
         userPhoto || null,
-        { items: outfit.items ?? [] },
+        outfitPayload,
         file,
         outfit.id != null ? outfit.id : undefined
       )

@@ -10,7 +10,6 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from core.config import settings
-from repositories.outfit import persist_outfits
 from services.pipeline import OUTPUT_DIR, UPLOAD_DIR, attach_image_urls
 
 router = APIRouter(tags=["demo"])
@@ -158,23 +157,18 @@ def _build_demo_result():
             safe_type = item_type.replace(" ", "_")[:30]
             filename = f"item_demo_{uuid.uuid4().hex[:6]}_{safe_type}.jpg"
             path = OUTPUT_DIR / filename
-            
+
             # Create placeholder with text
             placeholder_bytes = _create_placeholder_jpeg(text=item_type)
             path.write_bytes(placeholder_bytes)
             paths.append(str(path))
-        image_results.append({"individual_items": paths})
+        image_results.append({"flat_lay": "", "individual_items": paths})
 
     attach_image_urls(outfits, image_results)
-    outfit_ids = persist_outfits(
-        outfits,
-        image_results,
-        demo_source_path,
-        {"style_category": "casual", "demo": True},
-    )
-    for i, o in enumerate(outfits):
-        if i < len(outfit_ids):
-            o["id"] = outfit_ids[i]
+    image_results_urls = [
+        {"flat_lay": "", "individual_items": [f"/outputs/{Path(p).name}" for p in ir.get("individual_items") or []]}
+        for ir in image_results
+    ]
 
     return {
         "success": True,
@@ -186,6 +180,7 @@ def _build_demo_result():
             "age_group": DEMO_OUTFIT_DATA["age_group"],
             "outfits": outfits,
         },
+        "image_results": image_results_urls,
     }
 
 

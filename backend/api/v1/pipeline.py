@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from ai.captioning import analyze_wardrobe_item
 from ai.appearance import analyze_user_appearance
 from ai.suggestion import generate_outfit_suggestions
-from repositories.outfit import persist_outfits
 from services.pipeline import (
     UPLOAD_DIR,
     OUTPUT_DIR,
@@ -34,6 +33,18 @@ def _parse_occasions(occasions: str, attributes: dict) -> list[str]:
     if occasions and occasions.strip():
         return [o.strip() for o in occasions.split(",") if o.strip()]
     return occasions_from_attributes(attributes)
+
+
+def _image_results_to_urls(image_results: list) -> list[dict]:
+    """Convert image_results (file paths) to URL form for the client (for save later)."""
+    out = []
+    for ir in image_results:
+        flat = ir.get("flat_lay") or ""
+        out.append({
+            "flat_lay": f"/outputs/{Path(flat).name}" if flat else "",
+            "individual_items": [f"/outputs/{Path(p).name}" for p in (ir.get("individual_items") or []) if p],
+        })
+    return out
 
 
 # ── Routes ────────────────────────────────────────────────────────
@@ -77,16 +88,13 @@ async def full_pipeline(
         )
 
         attach_image_urls(outfits, image_results)
-        outfit_ids = persist_outfits(outfits, image_results, filepath, attributes)
-        for i, o in enumerate(outfit_data.get("outfits", [])):
-            if i < len(outfit_ids):
-                o["id"] = outfit_ids[i]
 
         return {
             "success": True,
             "image_id": f"/uploads/{filepath.name}",
             "attributes": attributes,
             "outfits": outfit_data,
+            "image_results": _image_results_to_urls(image_results),
         }
     except HTTPException:
         raise
@@ -151,12 +159,6 @@ async def _stream_pipeline(
 
         attach_image_urls(outfits, image_results)
 
-        yield emit({"type": "progress", "percent": 95, "message": "Saving…"})
-        outfit_ids = await asyncio.to_thread(persist_outfits, outfits, image_results, filepath, attributes)
-        for i, o in enumerate(outfit_data.get("outfits", [])):
-            if i < len(outfit_ids):
-                o["id"] = outfit_ids[i]
-
         yield emit({"type": "progress", "percent": 100, "message": "Done"})
         yield emit({
             "type": "result",
@@ -165,6 +167,7 @@ async def _stream_pipeline(
                 "image_id": f"/uploads/{filepath.name}",
                 "attributes": attributes,
                 "outfits": outfit_data,
+                "image_results": _image_results_to_urls(image_results),
             },
         })
 

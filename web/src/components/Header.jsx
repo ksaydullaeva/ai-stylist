@@ -12,7 +12,7 @@ export default function Header({ onToggleSaved, onReset, savedOutfitsLoading, ba
                     onClick={onToggleSaved}
                     disabled={savedOutfitsLoading}
                 >
-                    {savedOutfitsLoading ? 'Loading…' : 'Past lookbooks'}
+                    {savedOutfitsLoading ? 'Loading…' : 'Saved looks'}
                 </button>
                 <button type="button" className="tag-pill btn-reset-action" onClick={onReset}>
                     New Session

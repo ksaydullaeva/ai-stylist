@@ -199,10 +199,38 @@ export const api = {
     return res.json();
   },
 
-  /** GET /api/v1/outfits — list all saved outfits (lookbooks) for later reference */
+  /** GET /api/v1/outfits — list all saved looks for later reference */
   async getSavedOutfits(limit = 50) {
     const res = await fetch(`${getBase()}/api/v1/outfits?limit=${limit}`);
-    if (!res.ok) throw new Error('Failed to load saved outfits');
+    if (!res.ok) throw new Error('Failed to load saved looks');
+    return res.json();
+  },
+
+  /** POST /api/v1/outfits — save a single look for later reference. tryOnUrl: optional /outputs/xxx if try-on was already generated. */
+  async saveOutfit(outfit, imageResult, imageId, attributes, tryOnUrl = null) {
+    const payload = {
+      outfit,
+      image_result: imageResult,
+      image_id: imageId,
+      attributes: attributes || {},
+    };
+    if (tryOnUrl) payload.try_on_url = tryOnUrl;
+    const res = await fetch(`${getBase()}/api/v1/outfits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let message = 'Failed to save look';
+      try {
+        const j = JSON.parse(text);
+        message = j.detail || message;
+      } catch {
+        if (text && text.length <= 200) message = text;
+      }
+      throw new Error(message);
+    }
     return res.json();
   },
 
@@ -219,7 +247,7 @@ export const api = {
 
   /**
    * POST /api/v1/load-demo — load test outfits with placeholder images (no Gemini).
-   * Returns same shape as full-pipeline for testing lookbook, try-on, past lookbooks without using tokens.
+   * Returns same shape as full-pipeline for testing lookbook, try-on, and saved looks without using tokens.
    */
   async loadDemo() {
     const res = await fetch(`${getBase()}/api/v1/load-demo`, { method: 'POST' });

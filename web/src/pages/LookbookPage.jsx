@@ -1,12 +1,33 @@
 import React from 'react';
 import { api } from '../api';
 
-const LookCard = ({ outfit, i, result, preview, outfitTryOnUrls, runTryOn }) => {
+const LookCard = ({ outfit, i, result, preview, outfitTryOnUrls, runTryOn, onSaveLook, isSaved }) => {
     const [selectedItem, setSelectedItem] = React.useState(null);
+    const [saving, setSaving] = React.useState(false);
 
     const fullIndex = result.outfits.outfits.indexOf(outfit);
     const tryOnKey = outfit.id != null ? outfit.id : `i-${fullIndex}`;
     const tryOnUrl = outfitTryOnUrls[tryOnKey];
+    const imageResultFromPipeline = result.image_results?.[fullIndex];
+    const imageResult = imageResultFromPipeline || (() => {
+        const urls = (outfit.items || []).map((it) => it.image_url).filter(Boolean);
+        return urls.length ? { flat_lay: '', individual_items: urls } : null;
+    })();
+    const canSave = Boolean(result.image_id && imageResult && onSaveLook && !isSaved);
+
+    const handleSave = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canSave || saving) return;
+        setSaving(true);
+        try {
+            await onSaveLook(outfit, imageResult, result.image_id, result.attributes);
+        } catch (err) {
+            alert(err.message || 'Failed to save look');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const anchorItemLabel = `Your item - ${typeof result.attributes?.color === 'object'
         ? Object.values(result.attributes.color).join(', ')
@@ -16,6 +37,26 @@ const LookCard = ({ outfit, i, result, preview, outfitTryOnUrls, runTryOn }) => 
 
     return (
         <div key={outfit.id ?? i} className="look-card">
+            {onSaveLook && (
+                <button
+                    type="button"
+                    className={`btn-save-look btn-save-look-corner ${isSaved ? 'saved' : ''} ${saving ? 'saving' : ''}`}
+                    onClick={handleSave}
+                    disabled={!canSave || saving}
+                    title={saving ? 'Saving…' : isSaved ? 'Saved' : 'Save this look for later'}
+                    aria-label={saving ? 'Saving…' : isSaved ? 'Saved' : 'Save this look for later'}
+                >
+                    {isSaved ? (
+                        <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor" stroke="none" />
+                        </svg>
+                    ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                        </svg>
+                    )}
+                </button>
+            )}
             <div className="look-header-info">
                 <h3 className="look-title">{outfit.style_title}</h3>
                 <p className="look-occasion">{outfit.occasion}</p>
@@ -116,13 +157,23 @@ export default function LookbookPage({
     setActiveTag,
     runTryOn,
     outfitTryOnUrls,
-    filteredOutfits: passedFilteredOutfits
+    filteredOutfits: passedFilteredOutfits,
+    onSaveLook,
 }) {
+    const [savedIndices, setSavedIndices] = React.useState(new Set());
     const filteredOutfits = passedFilteredOutfits || (() => {
         if (!result?.outfits?.outfits) return []
         if (activeTag === 'All') return result.outfits.outfits
         return result.outfits.outfits.filter(o => o.occasion === activeTag)
     })();
+
+    const handleSaveLook = React.useCallback(async (outfit, imageResult, imageId, attributes) => {
+        const idx = result?.outfits?.outfits?.indexOf(outfit) ?? -1;
+        const key = outfit.id != null ? outfit.id : `i-${idx}`;
+        const tryOnUrl = outfitTryOnUrls[key] || null;
+        await api.saveOutfit(outfit, imageResult, imageId, attributes, tryOnUrl);
+        setSavedIndices(prev => new Set(prev).add(idx));
+    }, [result, outfitTryOnUrls]);
 
     return (
         <section className="lookbook-container">
@@ -144,17 +195,22 @@ export default function LookbookPage({
             </div>
 
             <div className="masonry-grid">
-                {filteredOutfits.map((outfit, i) => (
-                    <LookCard
-                        key={outfit.id ?? i}
-                        outfit={outfit}
-                        i={i}
-                        result={result}
-                        preview={preview}
-                        outfitTryOnUrls={outfitTryOnUrls}
-                        runTryOn={runTryOn}
-                    />
-                ))}
+                {filteredOutfits.map((outfit, i) => {
+                    const fullIndex = result?.outfits?.outfits?.indexOf(outfit) ?? i;
+                    return (
+                        <LookCard
+                            key={outfit.id ?? i}
+                            outfit={outfit}
+                            i={i}
+                            result={result}
+                            preview={preview}
+                            outfitTryOnUrls={outfitTryOnUrls}
+                            runTryOn={runTryOn}
+                            onSaveLook={onSaveLook ?? handleSaveLook}
+                            isSaved={savedIndices.has(fullIndex)}
+                        />
+                    );
+                })}
             </div>
         </section>
     );

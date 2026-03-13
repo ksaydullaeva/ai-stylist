@@ -59,6 +59,52 @@ def persist_outfits(
     return outfit_ids
 
 
+def persist_single_outfit(
+    outfit: dict,
+    image_result: dict,
+    source_filepath: Path,
+    attributes: dict,
+    try_on_filename: str | None = None,
+) -> int | None:
+    """Persist one outfit and its items. Returns created outfit ID or None on failure.
+    try_on_filename: optional filename of try-on image (e.g. tryon_abc123.jpg) if already generated."""
+    session = SessionLocal()
+    try:
+        db_outfit = Outfit(
+            occasion=outfit.get("occasion", ""),
+            style_title=outfit.get("style_title", ""),
+            style_notes=outfit.get("style_notes", ""),
+            color_palette=outfit.get("color_palette") or [],
+            source_image_path=str(source_filepath),
+            attributes=attributes,
+            try_on_image_path=try_on_filename,
+        )
+        session.add(db_outfit)
+        session.flush()
+        outfit_id = db_outfit.id
+        item_paths = image_result.get("individual_items") or []
+        for j, item in enumerate(outfit.get("items", [])):
+            session.add(
+                OutfitItem(
+                    outfit_id=db_outfit.id,
+                    category=item.get("category"),
+                    color=item.get("color"),
+                    type=item.get("type"),
+                    description=item.get("description"),
+                    shopping_keywords=item.get("shopping_keywords"),
+                    image_path=item_paths[j] if j < len(item_paths) else None,
+                )
+            )
+        session.commit()
+        return outfit_id
+    except Exception as exc:
+        session.rollback()
+        logger.warning("Could not persist single outfit: %s", exc)
+        return None
+    finally:
+        session.close()
+
+
 def update_outfit_try_on(outfit_id: int, try_on_filename: str) -> bool:
     """Set try_on_image_path for an outfit. Returns True if updated."""
     session = SessionLocal()

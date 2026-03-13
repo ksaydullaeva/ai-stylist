@@ -37,6 +37,7 @@ If the image does NOT show a person (e.g. only clothing, object, landscape, or n
 {"error": "no_person", "message": "No person detected. This feature works best with a photo of yourself."}
 
 If the image DOES show a person, analyze their appearance for styling recommendations. Extract:
+- gender: if the person's presentation is clearly masculine or feminine, use exactly "men" or "women"; otherwise omit (do not guess)
 - skin_tone: one of "fair", "light", "medium", "olive", "tan", "brown", "dark" or a short phrase (e.g. "warm medium")
 - undertone: "cool", "warm", or "neutral" if visible
 - hairstyle: brief description (e.g. "short dark hair", "long wavy blonde", "curly black")

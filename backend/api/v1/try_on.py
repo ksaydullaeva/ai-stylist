@@ -28,9 +28,10 @@ async def _save_upload(upload: UploadFile, prefix: str = "") -> Path:
 @router.post("/try-on")
 async def try_on(
     user_photo: UploadFile = File(..., description="Photo of the person (full or upper body)"),
-    outfit: str = File(..., description="JSON: { \"items\": [{\"type\", \"color\", \"image_url\"}], \"style_title\"? }"),
+    outfit: str = File(..., description="JSON: { \"items\": [{\"type\", \"color\", \"image_url\"}], \"style_title\"?, \"gender_context\"? }"),
     garment_image: UploadFile = File(None, description="Source garment: the initial clothing item image the user sent (with their optional self image)"),
     outfit_id: int | None = Form(None, description="Optional: DB outfit ID to save try-on image for later reference"),
+    gender: str | None = Form(None, description="Optional: 'men' or 'women' for default fashion pose (overrides outfit.gender_context)"),
 ):
     """Generate a try-on image: person wearing the given outfit using Gemini 2.5 Flash.
 
@@ -55,6 +56,19 @@ async def try_on(
     if not items:
         raise HTTPException(status_code=400, detail="outfit.items cannot be empty")
 
+    # Gender for default fashion pose: explicit form param or from outfit payload
+    try_on_gender = gender.strip() if gender else None
+    if not try_on_gender:
+        try_on_gender = (payload.get("gender_context") or "").strip() or None
+    if try_on_gender:
+        try_on_gender = try_on_gender.lower()
+        if try_on_gender == "male":
+            try_on_gender = "men"
+        elif try_on_gender == "female":
+            try_on_gender = "women"
+        if try_on_gender not in ("men", "women"):
+            try_on_gender = None
+
     # Resolve image_url (filename only) to full paths under OUTPUT_DIR
     item_paths: list[str] = []
     for it in items:
@@ -74,9 +88,14 @@ async def try_on(
     if not item_paths:
         raise HTTPException(status_code=400, detail="No valid outfit item images found")
 
-    # Build short description from items
+    # Build short description from items; when source garment is used, prepend anchor so try-on includes it
     desc_parts = [f"{it.get('color', '')} {it.get('type', '')}".strip() for it in items]
     outfit_description = ", ".join(p for p in desc_parts if p) or "outfit"
+    anchor_item = (payload.get("anchor_item") or "").strip()
+    if anchor_item and garment_image and garment_image.filename:
+        full_outfit_description = f"{anchor_item}, {outfit_description}"
+    else:
+        full_outfit_description = outfit_description
 
     # Save uploaded person photo
     person_path = await _save_upload(user_photo, prefix="tryon_person_")
@@ -94,9 +113,11 @@ async def try_on(
             generator.try_on,
             str(person_path),
             item_paths,
-            outfit_description,
+            full_outfit_description,
             str(output_path),
             source_garment_path=str(garment_path) if garment_path else None,
+            anchor_description=anchor_item or None,
+            gender=try_on_gender,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

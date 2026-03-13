@@ -16,7 +16,7 @@ const LookCard = ({ outfit, api, handleDelete }) => {
                 <button
                     className="btn-delete-outfit"
                     onClick={(e) => handleDelete(outfit.id, e)}
-                    title="Delete this lookbook"
+                    title="Delete this look"
                 >
                     &times;
                 </button>
@@ -128,7 +128,7 @@ const LookCard = ({ outfit, api, handleDelete }) => {
 export default function PastLookbooksPage({ savedOutfits, onBack, onDeleted }) {
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (!window.confirm('Are you sure you want to delete this lookbook?')) return;
+        if (!window.confirm('Are you sure you want to delete this look?')) return;
         try {
             await api.deleteOutfit(id);
             if (onDeleted) onDeleted();
@@ -144,14 +144,14 @@ export default function PastLookbooksPage({ savedOutfits, onBack, onDeleted }) {
                     <button type="button" className="btn-back-arrow" onClick={onBack} title="Back">
                         &larr;
                     </button>
-                    <h2 className="lookbook-title">Past lookbooks</h2>
+                    <h2 className="lookbook-title">Saved looks</h2>
                 </div>
                 <div className="lookbook-controls">
                     <button
                         type="button"
                         className="btn-delete-outfit-all"
                         onClick={async () => {
-                            if (window.confirm('Delete ALL saved lookbooks? This cannot be undone.')) {
+                            if (window.confirm('Delete ALL saved looks? This cannot be undone.')) {
                                 try {
                                     await api.deleteAllOutfits();
                                     if (onDeleted) onDeleted();
@@ -166,7 +166,7 @@ export default function PastLookbooksPage({ savedOutfits, onBack, onDeleted }) {
                 </div>
             </div>
             {savedOutfits.length === 0 ? (
-                <p className="saved-outfits-empty">No saved lookbooks yet. Create one to see it here.</p>
+                <p className="saved-outfits-empty">No saved looks yet. Create a lookbook and use “Save look” on any outfit to add it here.</p>
             ) : (
                 <div className="masonry-grid">
                     {savedOutfits.map((outfit) => (

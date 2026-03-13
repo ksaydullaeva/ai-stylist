@@ -22,7 +22,7 @@ Always respond in valid JSON only. No extra text."""
 
 BANNED_ITEMS = """
 NEVER suggest these outdated items under any circumstances:
-- Skinny jeans (suggest straight leg, wide leg, or barrel fit instead)
+- Skinny jeans, slim-fit jeans, tapered jeans, slim-fit pants, tapered pants (STRICTLY use straight leg, wide leg, barrel, baggy, or relaxed fit instead)
 - Stiletto heels (suggest block heels, mules, or loafers instead)
 - Platform flip flops
 - Ugg boots (unless specifically loungewear)
@@ -37,6 +37,13 @@ ALWAYS prefer modern alternatives:
 - Jeans: straight leg, wide leg, barrel, baggy, mom jeans
 - Shoes: loafers, mules, mary janes, chunky sneakers, kitten heels, ballet flats
 - Bags: shoulder bags, tote bags, mini bags
+"""
+
+PREFERENCES_BOTTOMS_AND_COLOR = """
+STRONG PREFERENCES (apply when suggesting items):
+- Bottoms (pants, trousers, jeans): You MUST use only straight-leg, wide-leg, baggy, relaxed fit, or barrel leg. NEVER use "skinny", "slim-fit", "slim fit", "tapered", or "fitted" for pants/jeans/trousers. Always write the type and description with "straight leg", "wide leg", "baggy", "relaxed fit", or "barrel leg".
+- Navy blue vs black: Do NOT overuse navy blue. Navy and black are different: navy has a blue undertone. If the user's item is black or very dark, suggest true black, charcoal, or other dark neutrals rather than defaulting to navy. Suggest navy only when it is a clear, intentional choice (e.g. navy blazer, nautical look), not as a substitute for black. Vary colors across outfits — avoid suggesting navy for multiple items (e.g. navy pants + navy boots) unless it is a deliberate monochrome navy look.
+- Gender-appropriate tops: For MEN, use ONLY masculine top terms: "shirt", "polo", "tee", "henley", "sweater", "knit", "sweatshirt", "oxford shirt". NEVER suggest "blouse" for men — blouse is for women only. For WOMEN, use "blouse", "top", "shirt", "tee", "sweater", "tunic" as appropriate. The "type" and "description" fields must use the correct term for the user's gender.
 """
 
 VALID_CATEGORIES = {"top", "bottom", "shoes", "accessory", "outerwear"}
@@ -90,7 +97,24 @@ def generate_outfit_suggestions(
     if occasions is None:
         occasions = ["casual", "smart-casual", "formal"]
 
-    gender = item_attributes.get("gender", "unisex")
+    # Prefer gender from user's photo when available; otherwise from garment attributes
+    gender = "unisex"
+    if user_appearance and not user_appearance.get("error"):
+        g = (user_appearance.get("gender") or "").strip().lower()
+        if g in ("men", "women"):
+            gender = g
+        elif g in ("male", "man"):
+            gender = "men"
+        elif g in ("female", "woman"):
+            gender = "women"
+    if gender == "unisex":
+        g = (item_attributes.get("gender") or "").strip().lower()
+        if g in ("men", "women"):
+            gender = g
+        elif g in ("male", "man"):
+            gender = "men"
+        elif g in ("female", "woman"):
+            gender = "women"
     age_group = item_attributes.get("age_group", "adult")
     season = item_attributes.get("season", "all-season")
     anchor_category = _infer_anchor_category(item_attributes)
@@ -111,13 +135,21 @@ def generate_outfit_suggestions(
     # Build required items: everything EXCEPT the anchor's category (user already has that)
     required_categories = []
     if anchor_category != "top":
-        required_categories.append('Exactly 1 top (category="top", e.g. shirt, blouse, sweater — not outerwear)')
+        if gender == "men":
+            required_categories.append('Exactly 1 top (category="top", e.g. shirt, polo, tee, sweater — NEVER blouse; not outerwear)')
+        else:
+            required_categories.append('Exactly 1 top (category="top", e.g. shirt, blouse, sweater — not outerwear)')
     if anchor_category != "bottom":
         required_categories.append('Exactly 1 bottom (category="bottom", e.g. pants, skirt, shorts)')
     if anchor_category != "shoes":
         required_categories.append('Exactly 1 pair of shoes (category="shoes")')
     if anchor_category != "accessory":
-        required_categories.append('At least 1 and up to 2 accessories (category="accessory", e.g. bag, belt, jewelry, scarf, hat)')
+        required_categories.append(
+            'At least 2 and up to 4 accessories (category="accessory", e.g. bag, jewelry, belt, hat). '
+            'Do not suggest more than 1 bag or more than 1 belt per outfit. '
+            'Vary accessory types; suggest scarves only when seasonally appropriate (e.g. cold weather), not in every outfit. '
+            'Prefer bags, belts, or jewelry when they fit the look; do not default to scarves for every look.'
+        )
     if anchor_category != "outerwear":
         required_categories.append(f'Optional outerwear (category="outerwear") ONLY if season is {season} and weather requires it')
     required_bullets = "\n        * ".join(required_categories)
@@ -134,6 +166,8 @@ def generate_outfit_suggestions(
 
     The user is a {age_group} {gender} person. Generate outfit suggestions accordingly.
     All suggested items must be appropriate for {gender} {age_group} style.
+    CRITICAL for men: Do NOT recommend a blouse. For tops, use only: shirt, polo, tee, henley, sweater, knit, sweatshirt, oxford shirt.
+    CRITICAL for bottoms: Do NOT recommend skinny, slim-fit, or tapered jeans/pants. Use ONLY: straight leg, wide leg, baggy, relaxed fit, barrel leg. The "type" and "description" for any bottom must include one of these fit terms.
 
     Occasions to cover: {', '.join(occasions)}.
 
@@ -143,13 +177,24 @@ def generate_outfit_suggestions(
     - Do NOT mix winter-only items (e.g. heavy coats, warm scarves, boots) with summer items (e.g. sandals, tank tops).
     - Shoes and accessories must match the season: e.g. for fall/winter use boots, loafers, closed-toe shoes; for summer use sandals, espadrilles; for all-season use versatile options.
 
+    WEATHER PROFILE (REQUIRED):
+    Before giving outfit suggestions, internally assume ONE weather profile:
+    - warm weather outfit
+    - mild weather outfit
+    - cold weather outfit
+    All items must match that weather profile.
+
     STRUCTURE RULES (STRICT — DO NOT VIOLATE):
     - Every outfit MUST include, in its "items" list, ONLY complementary categories (never the same type as the user's item):
         * {required_bullets}
     - Do NOT include any item with category="{anchor_category}" — the user's uploaded item fills that role.
+    - At most 1 bag and at most 1 belt per outfit; do not suggest multiple bags or multiple belts.
     - Each entry in "items" MUST be a separate object, never merged.
     - The "items" array MUST contain at least {min_items} and at most 6 objects.
     - For each item, include "enrichment": a short, catchy sentence explaining why this piece enriches the look.
+
+    PREFERENCES (STRONG — APPLY WHEN SUGGESTING):
+    {PREFERENCES_BOTTOMS_AND_COLOR}
 
     BANNED ITEMS (STRICT — DO NOT VIOLATE):
     {BANNED_ITEMS}
@@ -170,7 +215,7 @@ def generate_outfit_suggestions(
             "color": "<recommended color>",
             "description": "<brief description>",
             "enrichment": "<one catchy sentence why this item enriches the look>",
-            "shopping_keywords": "<gender-specific search keywords e.g. 'women slim fit trousers black'>"
+            "shopping_keywords": "<gender-specific search keywords e.g. 'women trousers black'>"
             }}
         ],
         "style_notes": "<why this outfit works>",
@@ -200,10 +245,55 @@ def generate_outfit_suggestions(
         for outfit in parsed.get("outfits", []):
             items = outfit.get("items") or []
             outfit["items"] = [it for it in items if (it.get("category") or "").strip().lower() != anchor_category]
+        # Enforce: no blouse for men — replace with shirt in type/description/shopping_keywords
+        if gender == "men":
+            for outfit in parsed.get("outfits", []):
+                for it in outfit.get("items") or []:
+                    if (it.get("category") or "").strip().lower() == "top":
+                        for key in ("type", "description", "shopping_keywords"):
+                            val = it.get(key)
+                            if isinstance(val, str) and "blouse" in val.lower():
+                                it[key] = re.sub(r"\bblouse\b", "shirt", val, flags=re.IGNORECASE)
+        # Enforce: no skinny/slim/tapered bottoms — replace with straight leg or relaxed fit
+        _enforce_straight_or_baggy_bottoms(parsed)
         _log_outfit_summary(parsed)
         return parsed
 
     return {"raw": raw_text}
+
+
+# Terms we never want for bottoms; map to preferred fit
+_BOTTOM_FIT_REPLACEMENTS = [
+    (re.compile(r"\bskinny\b", re.IGNORECASE), "straight leg"),
+    (re.compile(r"\bslim-fit\b", re.IGNORECASE), "straight leg"),
+    (re.compile(r"\bslim fit\b", re.IGNORECASE), "straight leg"),
+    (re.compile(r"\btapered\b", re.IGNORECASE), "straight leg"),
+    (re.compile(r"\bfitted\s+(pants|jeans|trousers)\b", re.IGNORECASE), r"straight leg \1"),
+    (re.compile(r"\bslim\s+(pants|jeans|trousers)\b", re.IGNORECASE), r"straight leg \1"),
+    (re.compile(r"\b(classic\s+and\s+)?classic\s+fit\b", re.IGNORECASE), "straight leg fit"),
+]
+
+
+def _enforce_straight_or_baggy_bottoms(parsed: dict) -> None:
+    """Rewrite any bottom item that mentions skinny/slim/tapered to use straight leg or relaxed fit."""
+    allowed_fit = ("straight leg", "wide leg", "baggy", "relaxed fit", "barrel", "relaxed")
+    for outfit in parsed.get("outfits", []):
+        for it in outfit.get("items") or []:
+            if (it.get("category") or "").strip().lower() != "bottom":
+                continue
+            for key in ("type", "description", "shopping_keywords"):
+                val = it.get(key)
+                if not isinstance(val, str):
+                    continue
+                original = val
+                for pattern, repl in _BOTTOM_FIT_REPLACEMENTS:
+                    val = pattern.sub(repl, val)
+                if val != original:
+                    it[key] = val
+            # If type still has no allowed fit term, prepend "straight leg " to type
+            t = (it.get("type") or "").strip()
+            if t and not any(f in t.lower() for f in allowed_fit):
+                it["type"] = "straight leg " + t.lstrip()
 
 
 def _log_outfit_summary(outfit_data: dict) -> None:
