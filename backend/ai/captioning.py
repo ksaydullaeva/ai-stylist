@@ -44,7 +44,7 @@ def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
 
     Extract the following details:
     - item_type (e.g. jeans, blouse, jacket, sneakers)
-    - category: MUST be exactly one of "top", "bottom", "shoes", "accessory", "outerwear"
+    - category: MUST be exactly one of "top", "bottom", "shoes", "outerwear", at least 2 of "accessory"
       (top=shirts/blouses/sweaters/tanks; bottom=pants/jeans/skirts/shorts; shoes=footwear; accessory=bag/belt/hat/jewelry; outerwear=jacket/coat/blazer)
     - gender: women or men
     - age_group: must be ONE of these exact values:
