@@ -83,7 +83,12 @@ def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
         start_idx = clean_text.find("{")
         if start_idx == -1:
             raise ValueError("No JSON object found in response")
-        parsed, _ = json.JSONDecoder().raw_decode(clean_text[start_idx:])
+        last_idx = clean_text.rfind("}")
+        if last_idx != -1 and last_idx > start_idx:
+            candidate = clean_text[start_idx:last_idx + 1]
+        else:
+            candidate = clean_text[start_idx:]
+        parsed, _ = json.JSONDecoder().raw_decode(candidate)
         print(f"[TIMER] TOTAL captioning: {time.time() - total_start:.4f}s")
         return parsed
     except (json.JSONDecodeError, ValueError) as e:

@@ -34,6 +34,24 @@ export const api = {
     return res.json();
   },
 
+  /** POST /api/v1/validate-item — Step 1 validation only */
+  async validateItem(itemFile) {
+    const form = new FormData();
+    form.append('item', itemFile);
+    const res = await fetch(`${getBase()}/api/v1/validate-item`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error('Validation failed');
+    return res.json();
+  },
+
+  /** POST /api/v1/validate-user-photo — Step 2 validation only */
+  async validateUserPhoto(userPhotoFile) {
+    const form = new FormData();
+    form.append('user_photo', userPhotoFile);
+    const res = await fetch(`${getBase()}/api/v1/validate-user-photo`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error('Validation failed');
+    return res.json();
+  },
+
   /** POST /api/v1/outfit-suggestions — get outfit suggestions from attributes */
   async getOutfitSuggestions(itemAttributes, occasions = ['casual', 'smart-casual']) {
     const res = await fetch(`${getBase()}/api/v1/outfit-suggestions`, {
@@ -76,7 +94,7 @@ export const api = {
    * onProgress(percent, message) is called for each progress event; resolves with result data.
    * userPhoto: optional File for context-aware suggestions (skin tone, hairstyle, etc.).
    */
-  async fullPipelineStream(file, occasions = 'casual,smart-casual,date night', onProgress, userPhoto = null) {
+  async fullPipelineStream(file, occasions = 'casual,smart-casual,date night', onProgress, userPhoto = null, onSuggestionsReady = null, onOutfitReady = null) {
     const form = new FormData();
     form.append('file', file);
     form.append('occasions', occasions ?? '');
@@ -124,6 +142,10 @@ export const api = {
         }
         if (obj.type === 'progress' && typeof obj.percent === 'number' && onProgress) {
           onProgress(obj.percent, obj.message ?? '');
+        } else if (obj.type === 'suggestions_ready' && obj.data != null && onSuggestionsReady) {
+          onSuggestionsReady(obj.data);
+        } else if (obj.type === 'outfit_ready' && obj.data != null && onOutfitReady) {
+          onOutfitReady(obj.data);
         } else if (obj.type === 'result' && obj.data != null) {
           return obj.data;
         } else if (obj.type === 'error') {
@@ -174,7 +196,9 @@ export const api = {
    */
   async tryOn(userPhoto, outfit, garmentImage = null, outfitId = null) {
     const form = new FormData();
-    form.append('user_photo', userPhoto);
+    if (userPhoto && userPhoto instanceof File) {
+      form.append('user_photo', userPhoto);
+    }
     form.append('outfit', JSON.stringify(outfit));
     if (garmentImage && garmentImage instanceof File) {
       form.append('garment_image', garmentImage);
@@ -188,7 +212,15 @@ export const api = {
       let message = `Server error (${res.status}).`;
       try {
         const j = JSON.parse(text);
-        message = j.detail || message;
+        if (typeof j.detail === 'string') {
+          message = j.detail;
+        } else if (Array.isArray(j.detail)) {
+          message = j.detail.map((d) => d?.msg || d?.message || JSON.stringify(d)).join('; ');
+        } else if (j.detail && typeof j.detail === 'object') {
+          message = j.detail.message || JSON.stringify(j.detail);
+        } else {
+          message = j.message || message;
+        }
       } catch {
         if (text.startsWith('<')) {
           message = `Server error (${res.status}). Backend may be unavailable or returned an error page.`;

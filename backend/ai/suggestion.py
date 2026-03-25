@@ -10,41 +10,27 @@ import ollama
 from core.config import settings
 from ai.retriever import load_outfit_db, retrieve_similar_outfits, format_for_prompt
 
-FASHION_SYSTEM_PROMPT = """You are an expert personal stylist with deep knowledge of:
-- Color theory and complementary palettes
-- Occasion-appropriate dressing (work, casual, formal, date night)
-- Fit and proportion balancing
-- Seasonal appropriateness
-- Current style trends
+FASHION_SYSTEM_PROMPT = """You are an expert personal stylist. Suggest complete outfits for a given clothing item.
+Always respond in valid JSON only. No extra text.
 
-When given a clothing item's attributes, suggest complete outfits.
-Always respond in valid JSON only. No extra text."""
+BANNED ITEMS (NEVER suggest):
+- Skinny/slim-fit/tapered jeans or pants → use straight-leg, wide-leg, baggy, relaxed, or barrel only
+- Stiletto heels → use block heels, mules, loafers
+- Platform flip-flops, Ugg boots (non-loungewear), bodycon dresses, peplum tops, wedge sneakers, fedora hats
 
-BANNED_ITEMS = """
-NEVER suggest these outdated items under any circumstances:
-- Skinny jeans, slim-fit jeans, tapered jeans, slim-fit pants, tapered pants (STRICTLY use straight leg, wide leg, barrel, baggy, or relaxed fit instead)
-- Stiletto heels (suggest block heels, mules, or loafers instead)
-- Platform flip flops
-- Ugg boots (unless specifically loungewear)
-- Cargo pants with excessive pockets
-- Bodycon dresses
-- Peplum tops
-- Wedge sneakers
-- Over-the-knee socks as fashion
-- Fedora hats
+STRICT RULES (DO NOT VIOLATE):
+1. NAVY LIMIT: Max 1 navy item per outfit. Navy ≠ black. If anchor is black/dark, use black/charcoal — not navy.
+2. STYLE COHERENCE: All items in one outfit must share the same style register.
+   - Casual → jeans/casual trousers + casual top + sneakers/loafers + casual bag
+   - Smart-casual → tailored trousers + neat top + loafers/clean sneakers + structured bag
+   - Business casual → tailored trousers/skirt + blouse/shirt + heels/loafers + structured bag
+   - Date night → elevated pieces only — no gym shoes, no hoodies
+   - Do NOT mix athletic with tailored, or summer-casual with formal.
+3. SEASON: All items must match the anchor item's season. No summer sandals with fall coats.
+4. BOTTOMS FIT: ONLY straight-leg, wide-leg, baggy, relaxed, or barrel. NEVER skinny/slim/tapered/fitted.
+5. GENDER TOPS — Men: shirt/polo/tee/henley/sweater/knit/sweatshirt only. NEVER blouse.
+   Women: blouse/top/shirt/tee/sweater/tunic as appropriate."""
 
-ALWAYS prefer modern alternatives:
-- Jeans: straight leg, wide leg, barrel, baggy, mom jeans
-- Shoes: loafers, mules, mary janes, chunky sneakers, kitten heels, ballet flats
-- Bags: shoulder bags, tote bags, mini bags
-"""
-
-PREFERENCES_BOTTOMS_AND_COLOR = """
-STRONG PREFERENCES (apply when suggesting items):
-- Bottoms (pants, trousers, jeans): You MUST use only straight-leg, wide-leg, baggy, relaxed fit, or barrel leg. NEVER use "skinny", "slim-fit", "slim fit", "tapered", or "fitted" for pants/jeans/trousers. Always write the type and description with "straight leg", "wide leg", "baggy", "relaxed fit", or "barrel leg".
-- Navy blue vs black: Do NOT overuse navy blue. Navy and black are different: navy has a blue undertone. If the user's item is black or very dark, suggest true black, charcoal, or other dark neutrals rather than defaulting to navy. Suggest navy only when it is a clear, intentional choice (e.g. navy blazer, nautical look), not as a substitute for black. Vary colors across outfits — avoid suggesting navy for multiple items (e.g. navy pants + navy boots) unless it is a deliberate monochrome navy look.
-- Gender-appropriate tops: For MEN, use ONLY masculine top terms: "shirt", "polo", "tee", "henley", "sweater", "knit", "sweatshirt", "oxford shirt". NEVER suggest "blouse" for men — blouse is for women only. For WOMEN, use "blouse", "top", "shirt", "tee", "sweater", "tunic" as appropriate. The "type" and "description" fields must use the correct term for the user's gender.
-"""
 
 VALID_CATEGORIES = {"top", "bottom", "shoes", "accessory", "outerwear"}
 
@@ -123,106 +109,48 @@ def generate_outfit_suggestions(
     similar = retrieve_similar_outfits(item_attributes, _get_outfit_db(), top_k=3)
     rag_context = format_for_prompt(similar)  # noqa: F841 — available for prompt expansion
 
+    # Slim attributes: only fields the LLM needs (drops material_guess, tags, etc.)
+    _SLIM_FIELDS = {"item_type", "category", "color", "pattern", "style_category", "season", "gender", "age_group", "fit"}
+    slim_attrs = {k: v for k, v in item_attributes.items() if k in _SLIM_FIELDS and v}
+
     user_context = ""
     if user_appearance and not user_appearance.get("error"):
-        user_context = f"""
-    CONTEXT FROM USER'S PHOTO (use to personalise colors and style):
-    {json.dumps(user_appearance, indent=2)}
-    - Suggest colors that complement their skin tone and undertone.
-    - Consider their hairstyle and overall look when choosing accessories and necklines.
-    """
+        _UP_FIELDS = {"skin_tone", "undertone", "hairstyle", "body_type", "gender"}
+        slim_appearance = {k: v for k, v in user_appearance.items() if k in _UP_FIELDS and v}
+        user_context = (
+            f"\nUSER: {json.dumps(slim_appearance, separators=(',', ':'))}"
+            "\n- Match colors to skin tone/undertone. Consider hairstyle for accessories/necklines."
+        )
 
-    # Build required items: everything EXCEPT the anchor's category (user already has that)
+    # Build required items: everything EXCEPT the anchor's category
     required_categories = []
     if anchor_category != "top":
-        if gender == "men":
-            required_categories.append('Exactly 1 top (category="top", e.g. shirt, polo, tee, sweater — NEVER blouse; not outerwear)')
-        else:
-            required_categories.append('Exactly 1 top (category="top", e.g. shirt, blouse, sweater — not outerwear)')
+        top_ex = "shirt/polo/tee/sweater" if gender == "men" else "blouse/top/shirt/sweater"
+        required_categories.append(f'1 top (category="top", e.g. {top_ex})')
     if anchor_category != "bottom":
-        required_categories.append('Exactly 1 bottom (category="bottom", e.g. pants, skirt, shorts)')
+        required_categories.append('1 bottom (category="bottom", e.g. pants/skirt/shorts)')
     if anchor_category != "shoes":
-        required_categories.append('Exactly 1 pair of shoes (category="shoes")')
+        required_categories.append('1 shoes (category="shoes")')
     if anchor_category != "accessory":
-        required_categories.append(
-            'At least 2 and up to 4 accessories (category="accessory", e.g. bag, jewelry, belt, hat). '
-            'Do not suggest more than 1 bag or more than 1 belt per outfit. '
-            'Vary accessory types; suggest scarves only when seasonally appropriate (e.g. cold weather), not in every outfit. '
-            'Prefer bags, belts, or jewelry when they fit the look; do not default to scarves for every look.'
-        )
+        required_categories.append('1–4 accessories (category="accessory": bag/jewelry/belt/hat; max 1 bag, max 1 belt; scarves only in cold weather)')
     if anchor_category != "outerwear":
-        required_categories.append(f'Optional outerwear (category="outerwear") ONLY if season is {season} and weather requires it')
-    required_bullets = "\n        * ".join(required_categories)
-    min_items = max(3, len([c for c in ["top", "bottom", "shoes"] if c != anchor_category]) + 1)  # at least 3 complements + optional accessory/outerwear
+        required_categories.append(f'Optional outerwear (category="outerwear") only if {season} weather requires it')
+    required_bullets = "\n* ".join(required_categories)
+    min_items = max(3, len([c for c in ["top", "bottom", "shoes"] if c != anchor_category]) + 1)
 
-    prompt = f"""Here is a clothing item from the user's wardrobe:
+    prompt = f"""Item: {json.dumps(slim_attrs, separators=(',', ':'))}
+{user_context}
 
-    {json.dumps(item_attributes, indent=2)}
-    {user_context}
+User: {age_group} {gender}. Occasions: {', '.join(occasions)}. Season: {season}.
 
-    ANCHOR CATEGORY RULE (CRITICAL — DO NOT VIOLATE):
-    - The user's uploaded item is a "{anchor_category}". They already have this piece.
-    - Do NOT suggest ANY item with category="{anchor_category}" in the "items" list. Suggest only items that PAIR WITH the user's item (e.g. if they uploaded pants, suggest tops, shoes, accessories — never more pants).
+RULES:
+- Anchor category="{anchor_category}" is already owned — NEVER suggest another "{anchor_category}".
+- Generate 1 outfit per occasion. Each outfit: {min_items}–6 items from these categories only:
+* {required_bullets}
+- Each item must have: category, type, color, description, enrichment, shopping_keywords.
 
-    The user is a {age_group} {gender} person. Generate outfit suggestions accordingly.
-    All suggested items must be appropriate for {gender} {age_group} style.
-    CRITICAL for men: Do NOT recommend a blouse. For tops, use only: shirt, polo, tee, henley, sweater, knit, sweatshirt, oxford shirt.
-    CRITICAL for bottoms: Do NOT recommend skinny, slim-fit, or tapered jeans/pants. Use ONLY: straight leg, wide leg, baggy, relaxed fit, barrel leg. The "type" and "description" for any bottom must include one of these fit terms.
-
-    Occasions to cover: {', '.join(occasions)}.
-
-    SEASON RULES (STRICT — ALL ITEMS MUST MATCH THE SAME SEASON):
-    - The user's item is for: {season}. Every suggested item (top, bottom, shoes, accessory, outerwear) MUST be appropriate for that same season.
-    - Do NOT mix summer-only items (e.g. slide sandals, flip-flops, open-toe sandals) with fall/winter items (e.g. heavy jackets, scarves, boots).
-    - Do NOT mix winter-only items (e.g. heavy coats, warm scarves, boots) with summer items (e.g. sandals, tank tops).
-    - Shoes and accessories must match the season: e.g. for fall/winter use boots, loafers, closed-toe shoes; for summer use sandals, espadrilles; for all-season use versatile options.
-
-    WEATHER PROFILE (REQUIRED):
-    Before giving outfit suggestions, internally assume ONE weather profile:
-    - warm weather outfit
-    - mild weather outfit
-    - cold weather outfit
-    All items must match that weather profile.
-
-    STRUCTURE RULES (STRICT — DO NOT VIOLATE):
-    - Every outfit MUST include, in its "items" list, ONLY complementary categories (never the same type as the user's item):
-        * {required_bullets}
-    - Do NOT include any item with category="{anchor_category}" — the user's uploaded item fills that role.
-    - At most 1 bag and at most 1 belt per outfit; do not suggest multiple bags or multiple belts.
-    - Each entry in "items" MUST be a separate object, never merged.
-    - The "items" array MUST contain at least {min_items} and at most 6 objects.
-    - For each item, include "enrichment": a short, catchy sentence explaining why this piece enriches the look.
-
-    PREFERENCES (STRONG — APPLY WHEN SUGGESTING):
-    {PREFERENCES_BOTTOMS_AND_COLOR}
-
-    BANNED ITEMS (STRICT — DO NOT VIOLATE):
-    {BANNED_ITEMS}
-
-    Respond ONLY with this JSON structure:
-    {{
-    "anchor_item": "<item type and color>",
-    "gender_context": "{gender}",
-    "age_group": "{age_group}",
-    "outfits": [
-        {{
-        "occasion": "<occasion name>",
-        "style_title": "<catchy outfit name>",
-        "items": [
-            {{
-            "category": "top" | "bottom" | "shoes" | "accessory" | "outerwear",
-            "type": "<item type>",
-            "color": "<recommended color>",
-            "description": "<brief description>",
-            "enrichment": "<one catchy sentence why this item enriches the look>",
-            "shopping_keywords": "<gender-specific search keywords e.g. 'women trousers black'>"
-            }}
-        ],
-        "style_notes": "<why this outfit works>",
-        "color_palette": ["<color1>", "<color2>", "<color3>"]
-        }}
-    ]
-    }}"""
+Respond ONLY with this JSON:
+{{"anchor_item":"<type+color>","gender_context":"{gender}","age_group":"{age_group}","outfits":[{{"occasion":"<name>","style_title":"<title>","items":[{{"category":"<cat>","type":"<type>","color":"<color>","description":"<desc>","enrichment":"<why>","shopping_keywords":"<keywords>"}}],"style_notes":"<notes>","color_palette":["<c1>","<c2>","<c3>"]}}]}}"""
 
     print(f"[TIMER] RAG + prompt build: {time.time() - start:.4f}s")
 
@@ -233,7 +161,7 @@ def generate_outfit_suggestions(
             {"role": "system", "content": FASHION_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        options={"temperature": 0.7, "num_predict": 1200, "num_ctx": 2048},
+        options={"temperature": 0.7, "num_predict": 1200, "num_ctx": 4096},
     )
     print(f"[TIMER] ollama.chat: {time.time() - start:.4f}s")
 

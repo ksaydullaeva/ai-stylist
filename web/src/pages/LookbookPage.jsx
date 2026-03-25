@@ -14,6 +14,7 @@ const LookCard = ({ outfit, i, result, preview, outfitTryOnUrls, runTryOn, onSav
         return urls.length ? { flat_lay: '', individual_items: urls } : null;
     })();
     const canSave = Boolean(result.image_id && imageResult && onSaveLook && !isSaved);
+    const outfitItemsReady = Boolean((outfit.items || []).length) && (outfit.items || []).every((it) => Boolean(it?.image_url));
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -70,7 +71,12 @@ const LookCard = ({ outfit, i, result, preview, outfitTryOnUrls, runTryOn, onSav
                         <img src={preview} alt="Your Item" className="look-card-img" />
                     )}
                     {!tryOnUrl && (
-                        <button className="fab-tryon" onClick={() => runTryOn(fullIndex)}>
+                        <button
+                            className="fab-tryon"
+                            onClick={() => runTryOn(fullIndex)}
+                            disabled={!outfitItemsReady}
+                            title={outfitItemsReady ? 'Virtual Try-On' : 'Generating outfit images…'}
+                        >
                             Virtual Try-On
                         </button>
                     )}

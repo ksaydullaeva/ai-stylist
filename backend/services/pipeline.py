@@ -28,19 +28,31 @@ def get_image_generator() -> OutfitImageGenerator:
 
 
 def occasions_from_attributes(attributes: dict) -> list[str]:
-    """Derive a list of occasions from captioned item attributes (fallback when user leaves blank)."""
+    """Derive a balanced list of occasions from captioned item attributes.
+
+    Always returns a diverse set so the model generates varied outfits rather
+    than defaulting entirely to casual.  The anchor's style_category is kept as
+    one entry; the remaining slots are filled from a fixed balanced pool so that
+    at least one elevated occasion (smart-casual, business casual, or date night)
+    is always present.
+    """
+    BALANCED_POOL = ["casual", "smart-casual", "business casual", "date night"]
+
     result: list[str] = []
-    if attributes.get("style_category"):
-        sc = attributes["style_category"]
-        result.append(sc if isinstance(sc, str) else str(sc))
-    tags = attributes.get("tags")
-    if isinstance(tags, list):
-        for t in tags:
-            if t and t not in result:
-                result.append(t if isinstance(t, str) else str(t))
-                if len(result) >= 3:
-                    break
-    return result or ["casual", "smart-casual"]
+
+    # Use the garment's own style_category as the first (most relevant) occasion.
+    sc = attributes.get("style_category")
+    if sc and isinstance(sc, str) and sc.strip():
+        result.append(sc.strip().lower())
+
+    # Fill remaining slots from the balanced pool, skipping duplicates.
+    for occasion in BALANCED_POOL:
+        if occasion not in result:
+            result.append(occasion)
+        if len(result) >= 4:
+            break
+
+    return result
 
 
 def attach_image_urls(outfits: list, image_results: list) -> None:

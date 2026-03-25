@@ -15,7 +15,7 @@ export default function TryOnModal({ outfit, tryOnLoading, tryOnError, tryOnResu
                     {tryOnLoading ? (
                         <div style={{ textAlign: 'center', padding: '40px' }}>
                             <div className="loading-spinner" style={{ margin: '0 auto 20px' }} />
-                            <p>Merging the look with your photo...</p>
+                            <p>Creating Try-On...</p>
                         </div>
                     ) : tryOnError ? (
                         <div className="banner error">{tryOnError}</div>

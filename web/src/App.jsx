@@ -12,6 +12,42 @@ import StudioPage from './pages/StudioPage'
 import LookbookPage from './pages/LookbookPage'
 import PastLookbooksPage from './pages/PastLookbooksPage'
 
+function BottomNav({ activeTab, onHome, onMatch }) {
+  return (
+    <nav className="bottom-nav" aria-label="Primary">
+      <button type="button" className={`bottom-nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={onHome}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3 10.5 12 4l9 6.5" />
+          <path d="M5.5 10v9h13v-9" />
+        </svg>
+        <span>Home</span>
+      </button>
+      <button type="button" className={`bottom-nav-item ${activeTab === 'match' ? 'active' : ''}`} onClick={onMatch}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="5" y="5" width="14" height="14" rx="2" />
+          <path d="M9 12h6" />
+          <path d="M12 9v6" />
+        </svg>
+        <span>Match</span>
+      </button>
+      <button type="button" className="bottom-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M11 4a7 7 0 1 0 4.95 11.95L20 20" />
+          <path d="M11 8v3l2.2 1.2" />
+        </svg>
+        <span>Lens</span>
+      </button>
+      <button type="button" className="bottom-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.76l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.46V21a2 2 0 1 1-4 0v-.08a1.6 1.6 0 0 0-.97-1.46 1.6 1.6 0 0 0-1.76.32l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.46-.97H3a2 2 0 1 1 0-4h.08a1.6 1.6 0 0 0 1.46-.97 1.6 1.6 0 0 0-.32-1.76l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.6 1.6 0 0 0 1.76.32H8.8a1.6 1.6 0 0 0 .97-1.46V3a2 2 0 1 1 4 0v.08a1.6 1.6 0 0 0 .97 1.46h.01a1.6 1.6 0 0 0 1.76-.32l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.6 1.6 0 0 0-.32 1.76v.01a1.6 1.6 0 0 0 1.46.97H21a2 2 0 1 1 0 4h-.08a1.6 1.6 0 0 0-1.52 1.21" />
+        </svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+  )
+}
+
 export default function App() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -85,10 +121,48 @@ export default function App() {
     setLoading(true)
     setError(null)
     setProgress(0)
+    // Reset pipeline/try-on state so streaming updates render cleanly.
+    setResult(null)
+    setTryOnOutfitIndex(null)
+    setTryOnResultUrl(null)
+    setTryOnError(null)
+    setOutfitTryOnUrls({})
     try {
-      const data = await api.fullPipelineStream(file, '', (percent) => {
-        setProgress(percent)
-      }, userPhoto)
+      const data = await api.fullPipelineStream(
+        file,
+        'casual,smart-casual,business casual,date night',
+        (percent) => {
+          setProgress(percent)
+        },
+        userPhoto,
+        // Sent once: all outfit cards (text) are ready.
+        (suggestions) => {
+          setResult(suggestions)
+        },
+        // Sent multiple times: each outfit images get generated.
+        (payload) => {
+          const { index, outfit, image_result } = payload || {}
+          if (index == null || !outfit) return
+          setResult((prev) => {
+            if (!prev) return prev
+            const prevOutfits = prev.outfits?.outfits
+            if (!Array.isArray(prevOutfits)) return prev
+
+            const nextOutfitsArr = [...prevOutfits]
+            nextOutfitsArr[index] = outfit
+
+            const prevImageResults = Array.isArray(prev.image_results) ? prev.image_results : []
+            const nextImageResults = [...prevImageResults]
+            nextImageResults[index] = image_result
+
+            return {
+              ...prev,
+              outfits: { ...prev.outfits, outfits: nextOutfitsArr },
+              image_results: nextImageResults,
+            }
+          })
+        }
+      )
       setResult(data)
     } catch (err) {
       setError(err.message || 'Something went wrong.')
@@ -97,23 +171,16 @@ export default function App() {
     }
   }
 
-  const loadDemo = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await api.loadDemo()
-      setResult(data)
-      setPreview(api.imageUrl(data.image_id))
-    } catch (err) {
-      setError(err.message || 'Failed to load demo.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const runTryOn = async (index) => {
     const outfit = result?.outfits?.outfits?.[index]
     if (!outfit) return
+
+    const items = outfit.items ?? []
+    const allItemImagesReady = items.length > 0 && items.every((it) => Boolean(it?.image_url))
+    if (!allItemImagesReady) {
+      setTryOnError('This outfit is still generating images. Please wait a moment.')
+      return
+    }
 
     setTryOnOutfitIndex(index)
     setTryOnLoading(true)
@@ -198,12 +265,7 @@ export default function App() {
         onClose={() => setTryOnOutfitIndex(null)}
       />
 
-      <Header
-        onToggleSaved={loadSavedOutfits}
-        onReset={reset}
-        savedOutfitsLoading={savedOutfitsLoading}
-        backendOk={backendOk}
-      />
+      <Header backendOk={backendOk} />
 
       <main>
         {savedOutfitsView ? (
@@ -222,7 +284,6 @@ export default function App() {
             onRemoveItem={() => { setFile(null); setPreview(null); }}
             onRemoveUserPhoto={() => { setUserPhoto(null); setUserPhotoPreview(null); }}
             runPipeline={runPipeline}
-            loadDemo={loadDemo}
             loading={loading}
             file={file}
             error={error}
@@ -244,9 +305,12 @@ export default function App() {
         )}
       </main>
 
-      <footer style={{ marginTop: '80px', textAlign: 'center', opacity: 0.5 }}>
-        &copy; {new Date().getFullYear()} Style Studio.
-      </footer>
+      <BottomNav
+        activeTab={savedOutfitsView ? 'home' : 'match'}
+        onHome={loadSavedOutfits}
+        onMatch={reset}
+      />
+
     </div>
   )
 }

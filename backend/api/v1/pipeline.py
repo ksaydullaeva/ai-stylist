@@ -142,6 +142,20 @@ async def _stream_pipeline(
 
         outfits = outfit_data.get("outfits", []) or []
         n_outfits = len(outfits)
+
+        # Let the client render the outfit cards immediately (text first).
+        # Images (item thumbnails / try-on inputs) stream in as individual outfits complete.
+        yield emit({
+            "type": "suggestions_ready",
+            "data": {
+                "success": True,
+                "image_id": f"/uploads/{filepath.name}",
+                "attributes": attributes,
+                "outfits": outfit_data,
+                "image_results": [],
+            },
+        })
+
         generator = get_image_generator()
         image_results = []
 
@@ -152,9 +166,35 @@ async def _stream_pipeline(
                 generator.generate_full_suite,
                 outfit_data, i, str(OUTPUT_DIR), str(filepath),
             )
+
+            # Attach item image URLs for this outfit so the frontend can show it immediately.
+            item_paths = result.get("individual_items") or []
+            outfit = outfits[i]
+            for j, item in enumerate(outfit.get("items", []) or []):
+                if j < len(item_paths) and item_paths[j]:
+                    item["image_url"] = f"/outputs/{Path(item_paths[j]).name}"
+
+            # Also provide a URL-form image_result payload for saving later.
+            flat = result.get("flat_lay") or ""
+            flat_url = f"/outputs/{Path(flat).name}" if flat else ""
+            individual_urls = [f"/outputs/{Path(p).name}" for p in (result.get("individual_items") or []) if p]
+            image_result = {
+                "flat_lay": flat_url,
+                "individual_items": individual_urls,
+            }
+
             image_results.append({
                 "flat_lay": result.get("flat_lay") or "",
                 "individual_items": result.get("individual_items") or [],
+            })
+
+            yield emit({
+                "type": "outfit_ready",
+                "data": {
+                    "index": i,
+                    "outfit": outfit,
+                    "image_result": image_result,
+                },
             })
 
         attach_image_urls(outfits, image_results)

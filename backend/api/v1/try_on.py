@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from core.config import settings
 from repositories.outfit import update_outfit_try_on
 from services.pipeline import OUTPUT_DIR, UPLOAD_DIR, get_image_generator
 
@@ -27,7 +28,7 @@ async def _save_upload(upload: UploadFile, prefix: str = "") -> Path:
 
 @router.post("/try-on")
 async def try_on(
-    user_photo: UploadFile = File(..., description="Photo of the person (full or upper body)"),
+    user_photo: UploadFile | None = File(None, description="Photo of the person (full or upper body). Optional; falls back to default men/women model."),
     outfit: str = File(..., description="JSON: { \"items\": [{\"type\", \"color\", \"image_url\"}], \"style_title\"?, \"gender_context\"? }"),
     garment_image: UploadFile = File(None, description="Source garment: the initial clothing item image the user sent (with their optional self image)"),
     outfit_id: int | None = Form(None, description="Optional: DB outfit ID to save try-on image for later reference"),
@@ -44,9 +45,6 @@ async def try_on(
 
     Returns: { "try_on_url": "/outputs/<filename>" }
     """
-    if not user_photo.filename or not user_photo.content_type or not user_photo.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Please upload an image file as user_photo")
-
     try:
         payload = json.loads(outfit)
     except json.JSONDecodeError as e:
@@ -68,6 +66,10 @@ async def try_on(
             try_on_gender = "women"
         if try_on_gender not in ("men", "women"):
             try_on_gender = None
+
+    if not try_on_gender:
+        # Default gender when not explicitly provided in payload/form.
+        try_on_gender = "women"
 
     # Resolve image_url (filename only) to full paths under OUTPUT_DIR
     item_paths: list[str] = []
@@ -97,8 +99,27 @@ async def try_on(
     else:
         full_outfit_description = outfit_description
 
-    # Save uploaded person photo
-    person_path = await _save_upload(user_photo, prefix="tryon_person_")
+    # Use uploaded person photo if present; otherwise fallback to default model photo by gender.
+    person_path: Path | None = None
+    person_is_temp = False
+    if user_photo and user_photo.filename:
+        if not user_photo.content_type or not user_photo.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Please upload an image file as user_photo")
+        person_path = await _save_upload(user_photo, prefix="tryon_person_")
+        person_is_temp = True
+    else:
+        fallback = settings.DEFAULT_TRYON_MEN_PHOTO if try_on_gender == "men" else settings.DEFAULT_TRYON_WOMEN_PHOTO
+        candidate = Path(fallback)
+        if not candidate.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Default try-on model photo is missing for gender '{try_on_gender}'. "
+                    "Upload a full-body photo or configure DEFAULT_TRYON_MEN_PHOTO / DEFAULT_TRYON_WOMEN_PHOTO."
+                ),
+            )
+        person_path = candidate
+
     garment_path = None
     if garment_image and garment_image.filename and garment_image.content_type and garment_image.content_type.startswith("image/"):
         garment_path = await _save_upload(garment_image, prefix="tryon_garment_")
@@ -122,7 +143,7 @@ async def try_on(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if person_path.exists():
+        if person_is_temp and person_path and person_path.exists():
             try:
                 person_path.unlink()
             except OSError:

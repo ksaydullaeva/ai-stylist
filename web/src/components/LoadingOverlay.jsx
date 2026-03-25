@@ -30,11 +30,13 @@ export default function LoadingOverlay({ loading, progress }) {
                         aria-hidden
                     />
                     <div className="loading-progress-block loading-progress-on-video">
-                        <p className="loading-progress-label">Creating your look</p>
+                        <div className="loading-progress-on-video-text">
+                            <p className="loading-progress-label">Creating your look</p>
+                            <p className="loading-progress" aria-live="polite">{Math.round(progress)}%</p>
+                        </div>
                         <div className="progress-bar-wrap loading-progress-bar" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label="Pipeline progress">
                             <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
                         </div>
-                        <p className="loading-progress" aria-live="polite">{Math.round(progress)}%</p>
                     </div>
                 </div>
             </div>

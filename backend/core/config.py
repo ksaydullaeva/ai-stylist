@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # ── Storage directories ──────────────────────────────────────────
     UPLOAD_DIR: Path = _BACKEND_DIR / "uploads"
     OUTPUT_DIR: Path = _BACKEND_DIR / "outputs"
+    # Optional default person photos for try-on fallback when user_photo is omitted.
+    # Can be overridden in backend/.env as absolute paths.
+    DEFAULT_TRYON_MEN_PHOTO: str = "/Users/khurshida/.cursor/projects/Users-khurshida-python-projects-stylist-outfit-suggestion/assets/Screenshot_2026-03-12_at_10.32.48-aa6c3689-fc1c-4a3f-bfce-6ca41218fee7.png"
+    DEFAULT_TRYON_WOMEN_PHOTO: str = "/Users/khurshida/.cursor/projects/Users-khurshida-python-projects-stylist-outfit-suggestion/assets/02075013251-p-4d87f74c-92a8-44af-a34f-a7eb26f4224c.png"
 
     # ── RAG dataset ──────────────────────────────────────────────────
     POLYVORE_JSON: Path = _BACKEND_DIR / "polyvore_converted.json"
