@@ -25,4 +25,3 @@ backend/proto/   # Usually you keep proto but some prefer not to push generated 
 # Dataset (if large)
 backend/data/
 backend/polyvore-dataset/
-backend/polyvore_converted.json
