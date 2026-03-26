@@ -309,4 +309,22 @@ export const api = {
       throw err
     }
   },
+
+  /** POST /api/v1/lens/search — find similar Zara items by image embeddings */
+  async lensSearch(imageFile, n = 12, zaraCategory = null) {
+    const form = new FormData();
+    form.append('image', imageFile);
+    const params = new URLSearchParams();
+    params.set('n', String(n));
+    if (zaraCategory) params.set('zara_category', zaraCategory);
+    const res = await fetch(`${getBase()}/api/v1/lens/search?${params.toString()}`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'Lens search failed');
+    }
+    return res.json();
+  },
 };

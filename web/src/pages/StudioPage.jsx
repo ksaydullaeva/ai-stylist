@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 
-const HangerIcon = () => (
-    <svg className="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2v2m0 0a2 2 0 0 0-2 2v1h4V6a2 2 0 0 0-2-2zM4 19l8-12 8 12H4z" />
-    </svg>
-);
-
 const PersonIcon = () => (
     <svg className="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -153,7 +147,7 @@ export default function StudioPage({
                     <div className="upload-validating tcm-checking-state">
                         <div className="upload-validating-icons">
                             <span className="upload-validating-icon upload-validating-icon-item">
-                                <HangerIcon />
+                                <img className="upload-validating-icon-img" src="/icons/clothing-upload.png" alt="" />
                             </span>
                             <span className="upload-validating-icon upload-validating-icon-model">
                                 <PersonIcon />
@@ -169,7 +163,7 @@ export default function StudioPage({
                     <>
                         <div className="dropzone tcm-dropzone" onClick={() => document.getElementById('item-input').click()}>
                             <input id="item-input" type="file" className="hidden" accept="image/*" onChange={onFileChange} />
-                            <HangerIcon />
+                            <img className="dropzone-icon" src="/icons/clothing-upload.png" alt="" />
                             <span className="dropzone-text">Drop the item you want to style.</span>
                             <span className="tcm-dropzone-hint">
                                 Upload a photo where only ONE garment is visible. Use a plain background, good lighting, and make sure the full garment is visible.
@@ -234,7 +228,7 @@ export default function StudioPage({
                         {itemFailedPair && (
                             <div className="dropzone tcm-dropzone" onClick={() => document.getElementById('item-input').click()}>
                                 <input id="item-input" type="file" className="hidden" accept="image/*" onChange={onFileChange} />
-                                <HangerIcon />
+                                <img className="dropzone-icon" src="/icons/clothing-upload.png" alt="" />
                                 <span className="dropzone-text">Drop the item you want to style.</span>
                                 <span className="tcm-dropzone-hint">
                                     Upload a photo where only ONE garment is visible (not a full outfit). Use a plain background, good lighting, and make sure the full garment is visible.

@@ -11,8 +11,9 @@ import Header from './components/Header'
 import StudioPage from './pages/StudioPage'
 import LookbookPage from './pages/LookbookPage'
 import PastLookbooksPage from './pages/PastLookbooksPage'
+import LensPage from './pages/LensPage'
 
-function BottomNav({ activeTab, onHome, onMatch }) {
+function BottomNav({ activeTab, onHome, onMatch, onLens }) {
   return (
     <nav className="bottom-nav" aria-label="Primary">
       <button type="button" className={`bottom-nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={onHome}>
@@ -30,7 +31,7 @@ function BottomNav({ activeTab, onHome, onMatch }) {
         </svg>
         <span>Match</span>
       </button>
-      <button type="button" className="bottom-nav-item">
+      <button type="button" className={`bottom-nav-item ${activeTab === 'lens' ? 'active' : ''}`} onClick={onLens}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M11 4a7 7 0 1 0 4.95 11.95L20 20" />
           <path d="M11 8v3l2.2 1.2" />
@@ -59,6 +60,9 @@ export default function App() {
   const [backendOk, setBackendOk] = useState(null)
   const [progress, setProgress] = useState(0)
   const [activeTag, setActiveTag] = useState('All')
+  const [activeView, setActiveView] = useState('match') // match | home | lens
+  const [headerOverride, setHeaderOverride] = useState(null)
+  const [lensResetKey, setLensResetKey] = useState(0)
 
   // Try-on state
   const [tryOnOutfitIndex, setTryOnOutfitIndex] = useState(null)
@@ -221,6 +225,7 @@ export default function App() {
     setTryOnResultUrl(null)
     setOutfitTryOnUrls({})
     setSavedOutfitsView(false)
+    setActiveView('match')
     api.getSavedOutfits().then((data) => setSavedOutfits(data.outfits || [])).catch(() => setSavedOutfits([]))
   }
 
@@ -230,9 +235,11 @@ export default function App() {
       const data = await api.getSavedOutfits()
       setSavedOutfits(data.outfits || [])
       setSavedOutfitsView(true)
+      setActiveView('home')
     } catch {
       setSavedOutfits([])
       setSavedOutfitsView(true)
+      setActiveView('home')
     } finally {
       setSavedOutfitsLoading(false)
     }
@@ -265,13 +272,19 @@ export default function App() {
         onClose={() => setTryOnOutfitIndex(null)}
       />
 
-      <Header backendOk={backendOk} />
+      <Header
+        backendOk={backendOk}
+        title={headerOverride?.title}
+        tagline={headerOverride?.tagline}
+      />
 
       <main>
-        {savedOutfitsView ? (
+        {activeView === 'lens' ? (
+          <LensPage key={lensResetKey} onHeader={setHeaderOverride} />
+        ) : savedOutfitsView ? (
           <PastLookbooksPage
             savedOutfits={savedOutfits}
-            onBack={() => setSavedOutfitsView(false)}
+            onBack={() => { setSavedOutfitsView(false); setActiveView('match') }}
             onDeleted={loadSavedOutfits}
           />
         ) : stage === 0 ? (
@@ -306,9 +319,15 @@ export default function App() {
       </main>
 
       <BottomNav
-        activeTab={savedOutfitsView ? 'home' : 'match'}
+        activeTab={activeView}
         onHome={loadSavedOutfits}
         onMatch={reset}
+        onLens={() => {
+          setSavedOutfitsView(false)
+          setHeaderOverride(null)
+          setLensResetKey((k) => k + 1)
+          setActiveView('lens')
+        }}
       />
 
     </div>

@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     # ── RAG dataset ──────────────────────────────────────────────────
     POLYVORE_JSON: Path = _BACKEND_DIR / "polyvore_converted.json"
 
+    # ── Lens (Zara embeddings) ───────────────────────────────────────
+    # Chroma persistent directory containing the `zara_products` collection.
+    CHROMA_ZARA_DIR: Path = _BACKEND_DIR / "chroma_zara"
+    # Root directory for Zara scraped images referenced by Chroma metadata `image_path`.
+    # Used only for serving previews in Lens results.
+    ZARA_DATASET_ROOT: str = "/Users/khurshida/fashion-scraper/dataset"
+    # Chroma collection to use for Lens image→image similarity (built by build_zara_image_collection.py).
+    ZARA_IMAGE_COLLECTION: str = "zara_products_image"
+
     def ensure_dirs(self) -> None:
         self.UPLOAD_DIR.mkdir(exist_ok=True)
         self.OUTPUT_DIR.mkdir(exist_ok=True)

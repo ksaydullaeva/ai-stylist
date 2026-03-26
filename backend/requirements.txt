@@ -4,6 +4,8 @@ ollama
 pillow
 pandas
 pyarrow
+chromadb
+open-clip-torch
 
 # Image Generation
 diffusers
