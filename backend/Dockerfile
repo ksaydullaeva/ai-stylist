@@ -17,7 +17,10 @@ RUN python3.12 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install PyTorch with CUDA first (cu124 is compatible with CUDA 12.8 runtime)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124
+RUN pip install --no-cache-dir \
+    torch==2.5.1 \
+    torchvision==0.20.1 \
+    --index-url https://download.pytorch.org/whl/cu124
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
