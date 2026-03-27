@@ -45,6 +45,7 @@ def persist_outfits(
                         color=item.get("color"),
                         type=item.get("type"),
                         description=item.get("description"),
+                        enrichment=item.get("enrichment"),
                         shopping_keywords=item.get("shopping_keywords"),
                         image_path=item_paths[j] if j < len(item_paths) else None,
                     )
@@ -91,6 +92,7 @@ def persist_single_outfit(
                     color=item.get("color"),
                     type=item.get("type"),
                     description=item.get("description"),
+                    enrichment=item.get("enrichment"),
                     shopping_keywords=item.get("shopping_keywords"),
                     image_path=item_paths[j] if j < len(item_paths) else None,
                 )
@@ -142,6 +144,7 @@ def list_outfits(limit: int = 50) -> list[dict]:
                     "color": i.color,
                     "type": i.type,
                     "description": i.description,
+                    "enrichment": i.enrichment or i.description,
                     "shopping_keywords": i.shopping_keywords,
                     "image_url": f"/outputs/{Path(i.image_path).name}" if i.image_path else None,
                 }

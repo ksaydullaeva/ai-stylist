@@ -3,25 +3,10 @@ Optional user-appearance analysis for context-aware outfit recommendations.
 Extracts skin tone, hairstyle, and other visible attributes from a selfie.
 """
 
-import base64
-import io
-import json
-import re
 from typing import Any, Dict
 
-import ollama
-from PIL import Image
-
+from ai.gemini_client import extract_json_obj, generate_vision_text
 from core.config import settings
-
-
-def _encode_image(image_path: str, max_size: int = 400) -> str:
-    with Image.open(image_path) as img:
-        img.thumbnail((max_size, max_size))
-        buffer = io.BytesIO()
-        img_format = img.format if img.format else "PNG"
-        img.save(buffer, format=img_format, quality=85)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def analyze_user_appearance(image_path: str) -> Dict[str, Any]:
@@ -30,8 +15,6 @@ def analyze_user_appearance(image_path: str) -> Dict[str, Any]:
     Returns a dict with skin_tone, undertone, hairstyle, hair_color, face_shape, general_notes.
     If no person is detected, returns {"error": "no_person", "message": "..."}.
     """
-    image_data = _encode_image(image_path)
-
     prompt = """You are a fashion and style expert. Look at this image and decide if it shows a PERSON (face/portrait/selfie or full body).
 If the image does NOT show a person (e.g. only clothing, object, landscape, or no clear face), respond with ONLY this JSON and nothing else:
 {"error": "no_person", "message": "No person detected. This feature works best with a photo of yourself."}
@@ -49,27 +32,25 @@ If the image DOES show a person, analyze their appearance for styling recommenda
 Respond ONLY with a valid JSON object. No markdown, no extra text."""
 
     try:
-        response = ollama.chat(
-            model=settings.VISION_MODEL,
-            options={"num_ctx": 1024, "num_predict": 150, "temperature": 0.0},
-            messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+        raw_text = generate_vision_text(
+            prompt,
+            image_path=image_path,
+            model_name=settings.VISION_MODEL,
+            temperature=0.0,
+            max_output_tokens=600,
+            max_image_size=400,
         )
     except Exception as e:
         return {"error": "analysis_failed", "message": str(e)}
 
-    raw_text = response["message"]["content"]
+    parsed = extract_json_obj(raw_text)  # expects a JSON object
+    if parsed is None:
+        return {} if "{" not in raw_text else {"raw_output": raw_text}
 
-    try:
-        clean_text = re.sub(r"```json|```", "", raw_text).strip()
-        start_idx = clean_text.find("{")
-        if start_idx == -1:
-            return {}
-        parsed, _ = json.JSONDecoder().raw_decode(clean_text[start_idx:])
-        if parsed.get("error") == "no_person":
-            return parsed
-        return {k: v for k, v in parsed.items() if k not in ("error", "message") and v is not None}
-    except (json.JSONDecodeError, ValueError):
-        return {"raw_output": raw_text}
+    if parsed.get("error") == "no_person":
+        return parsed
+
+    return {k: v for k, v in parsed.items() if k not in ("error", "message") and v is not None}
 
 
 def validate_user_photo_for_tryon(image_path: str) -> Dict[str, Any]:
@@ -77,7 +58,6 @@ def validate_user_photo_for_tryon(image_path: str) -> Dict[str, Any]:
     Check that the image shows a person and full body (for virtual try-on).
     Returns {"ok": True} or {"error": "no_person"|"not_full_body", "message": "..."}.
     """
-    image_data = _encode_image(image_path)
     prompt = """Look at this image. Answer with ONLY a JSON object, nothing else.
 
 1. Does it show a PERSON (human face/body)? If NO (e.g. object, landscape, animal, only clothing), respond:
@@ -90,25 +70,25 @@ def validate_user_photo_for_tryon(image_path: str) -> Dict[str, Any]:
    {"ok": true}"""
 
     try:
-        response = ollama.chat(
-            model=settings.VISION_MODEL,
-            options={"num_ctx": 512, "num_predict": 80, "temperature": 0.0},
-            messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+        raw_text = generate_vision_text(
+            prompt,
+            image_path=image_path,
+            model_name=settings.VISION_MODEL,
+            temperature=0.0,
+            max_output_tokens=300,
+            max_image_size=420,
         )
     except Exception as e:
         return {"error": "analysis_failed", "message": str(e)}
 
-    raw_text = response["message"]["content"]
-    try:
-        clean_text = re.sub(r"```json|```", "", raw_text).strip()
-        start_idx = clean_text.find("{")
-        if start_idx == -1:
-            return {"error": "invalid_response", "message": "Could not validate image."}
-        parsed, _ = json.JSONDecoder().raw_decode(clean_text[start_idx:])
-        if parsed.get("ok") is True:
-            return {"ok": True}
-        if parsed.get("error") and parsed.get("message"):
-            return {"error": parsed["error"], "message": parsed["message"]}
-        return {"error": "invalid_response", "message": "Please upload a clear full-body photo."}
-    except (json.JSONDecodeError, ValueError):
+    parsed = extract_json_obj(raw_text)
+    if parsed is None:
         return {"error": "invalid_response", "message": "Could not validate image."}
+
+    if parsed.get("ok") is True:
+        return {"ok": True}
+
+    if parsed.get("error") and parsed.get("message"):
+        return {"error": parsed["error"], "message": parsed["message"]}
+
+    return {"error": "invalid_response", "message": "Please upload a clear full-body photo."}

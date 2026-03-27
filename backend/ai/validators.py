@@ -8,25 +8,13 @@ These validators are stricter than general classification:
 
 from __future__ import annotations
 
-import base64
-import io
 import json
 import re
 from typing import Any, Dict
 
-import ollama
-from PIL import Image
+from ai.gemini_client import generate_vision_text
 
 from core.config import settings
-
-
-def _encode_image(image_path: str, max_size: int = 420) -> str:
-    with Image.open(image_path) as img:
-        img.thumbnail((max_size, max_size))
-        buffer = io.BytesIO()
-        img_format = img.format if img.format else "PNG"
-        img.save(buffer, format=img_format, quality=85)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def _parse_json(raw_text: str) -> Dict[str, Any]:
@@ -58,7 +46,6 @@ def validate_item_photo_for_trimming(image_path: str) -> Dict[str, Any]:
         "no_garment", "too_blurry", "too_dark", "too_small", "cropped_item",
         "busy_background", "occluded_item", "multiple_items", "invalid_response"
     """
-    image_data = _encode_image(image_path)
     prompt = """You are validating an upload for a fashion app.
 Answer with ONLY a JSON object, nothing else.
 
@@ -95,15 +82,18 @@ Important:
 - The full garment must be visible (including sleeves and hem) for accurate trimming."""
 
     try:
-        response = ollama.chat(
-            model=settings.VISION_MODEL,
-            options={"num_ctx": 512, "num_predict": 120, "temperature": 0.0},
-            messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+        raw_text = generate_vision_text(
+            prompt,
+            image_path=image_path,
+            model_name=settings.VISION_MODEL,
+            temperature=0.0,
+            max_output_tokens=260,
+            max_image_size=420,
         )
     except Exception as e:
         return {"error": "analysis_failed", "message": str(e)}
 
-    parsed = _parse_json(response["message"]["content"])
+    parsed = _parse_json(raw_text)
     if parsed.get("ok") is True:
         return {"ok": True}
     if parsed.get("error") and parsed.get("message"):
@@ -121,7 +111,6 @@ def validate_user_photo_for_outfit_fit(image_path: str) -> Dict[str, Any]:
         "no_person", "not_full_body", "face_not_visible", "too_blurry", "too_dark",
         "heavy_outerwear", "pose_issue", "invalid_response"
     """
-    image_data = _encode_image(image_path)
     prompt = """You are validating a user's full-body photo for a virtual styling app.
 Answer with ONLY a JSON object, nothing else.
 
@@ -146,15 +135,18 @@ If all requirements pass, return:
 {"ok": true}"""
 
     try:
-        response = ollama.chat(
-            model=settings.VISION_MODEL,
-            options={"num_ctx": 512, "num_predict": 120, "temperature": 0.0},
-            messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+        raw_text = generate_vision_text(
+            prompt,
+            image_path=image_path,
+            model_name=settings.VISION_MODEL,
+            temperature=0.0,
+            max_output_tokens=260,
+            max_image_size=420,
         )
     except Exception as e:
         return {"error": "analysis_failed", "message": str(e)}
 
-    parsed = _parse_json(response["message"]["content"])
+    parsed = _parse_json(raw_text)
     if parsed.get("ok") is True:
         return {"ok": True}
     if parsed.get("error") and parsed.get("message"):

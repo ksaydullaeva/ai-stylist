@@ -1,35 +1,16 @@
-"""Vision-based garment attribute extraction using a local Ollama model."""
+"""Vision-based garment attribute extraction using Gemini."""
 
-import base64
-import io
-import json
-import re
 import time
 from typing import Any, Dict
 
-import ollama
-from PIL import Image
+from ai.gemini_client import extract_json_obj, generate_vision_text
 
 from core.config import settings
-
-
-def _encode_image(image_path: str, max_size: int = 300) -> str:
-    """Downscale and base64-encode an image for the vision model."""
-    with Image.open(image_path) as img:
-        img.thumbnail((max_size, max_size))
-        buffer = io.BytesIO()
-        img_format = img.format if img.format else "PNG"
-        img.save(buffer, format=img_format, quality=85)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
     """Run the vision model on a garment image; return structured attributes dict."""
     total_start = time.time()
-
-    start = time.time()
-    image_data = _encode_image(image_path)
-    print(f"[TIMER] image encoding: {time.time() - start:.4f}s")
 
     prompt = """You are a Fashion Expert. First, decide if this image shows a WEARABLE GARMENT (clothing item) such as a top, jacket, pants, skirt, dress, shoes, accessory, etc. — either on a person, on a mannequin, or as a product/flat lay.
 
@@ -44,8 +25,8 @@ def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
 
     Extract the following details:
     - item_type (e.g. jeans, blouse, jacket, sneakers)
-    - category: MUST be exactly one of "top", "bottom", "shoes", "outerwear", at least 2 of "accessory"
-      (top=shirts/blouses/sweaters/tanks; bottom=pants/jeans/skirts/shorts; shoes=footwear; accessory=bag/belt/hat/jewelry; outerwear=jacket/coat/blazer)
+    - category: MUST be exactly one of "top", "bottom", "dress", "shoes", "outerwear", at least 2 of "accessory"
+      (top=shirts/blouses/sweaters/tanks; bottom=pants/jeans/skirts/shorts; dress=one-piece dresses (midi/mini/maxi)/jumpsuits/rompers; shoes=footwear; accessory=bag/belt/hat/jewelry; outerwear=jacket/coat/blazer)
     - gender: women or men
     - age_group: must be ONE of these exact values:
         * "kids"       → under 12, small sizing, playful designs, cartoon prints
@@ -64,33 +45,21 @@ def analyze_wardrobe_item(image_path: str) -> Dict[str, Any]:
     Respond ONLY with a valid JSON object (either the error object above or the structured description)."""
 
     start = time.time()
-    response = ollama.chat(
-        model=settings.VISION_MODEL,
-        options={
-            "num_ctx": 1024,
-            "num_predict": 120,
-            "temperature": 0.0,
-        },
-        messages=[{"role": "user", "content": prompt, "images": [image_data]}],
+    raw_text = generate_vision_text(
+        prompt,
+        image_path=image_path,
+        model_name=settings.VISION_MODEL,
+        temperature=0.0,
+        max_output_tokens=900,
+        max_image_size=300,
     )
-    print(f"[TIMER] ollama.chat: {time.time() - start:.4f}s")
+    print(f"[TIMER] gemini.generate_vision_text: {time.time() - start:.4f}s")
 
-    raw_text = response["message"]["content"]
     print(raw_text)
 
-    try:
-        clean_text = re.sub(r"```json|```", "", raw_text).strip()
-        start_idx = clean_text.find("{")
-        if start_idx == -1:
-            raise ValueError("No JSON object found in response")
-        last_idx = clean_text.rfind("}")
-        if last_idx != -1 and last_idx > start_idx:
-            candidate = clean_text[start_idx:last_idx + 1]
-        else:
-            candidate = clean_text[start_idx:]
-        parsed, _ = json.JSONDecoder().raw_decode(candidate)
-        print(f"[TIMER] TOTAL captioning: {time.time() - total_start:.4f}s")
-        return parsed
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Parsing error: {e}")
+    parsed = extract_json_obj(raw_text)
+    if parsed is None:
         return {"raw_output": raw_text, "error": "Could not parse JSON"}
+
+    print(f"[TIMER] TOTAL captioning: {time.time() - total_start:.4f}s")
+    return parsed

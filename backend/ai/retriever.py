@@ -18,8 +18,25 @@ def score_outfit(outfit: dict, item: dict) -> float:
         if word in outfit_text:
             score += 2.0
 
-    primary_color = item.get("color", {}).get("primary", "").lower()
-    if primary_color and primary_color in outfit_text:
+    # Color can be returned as:
+    # - {"primary": "...", "secondary": "..."} (older/local models)
+    # - "navy blue" (Gemini captions)
+    # - ["navy blue", "white"] (some prompts)
+    color_val = item.get("color")
+    color_candidates: list[str] = []
+    if isinstance(color_val, dict):
+        for k in ("primary", "secondary"):
+            v = color_val.get(k)
+            if isinstance(v, str) and v.strip():
+                color_candidates.append(v.strip())
+    elif isinstance(color_val, list):
+        for v in color_val:
+            if isinstance(v, str) and v.strip():
+                color_candidates.append(v.strip())
+    elif isinstance(color_val, str) and color_val.strip():
+        color_candidates.append(color_val.strip())
+
+    if any(c.lower() in outfit_text for c in color_candidates):
         score += 1.5
 
     style = item.get("style_category", "").lower()

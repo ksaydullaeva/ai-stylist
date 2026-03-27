@@ -30,6 +30,7 @@ class OutfitItem(Base):
     color = Column(String(100))
     type = Column(String(100))
     description = Column(Text)
+    enrichment = Column(Text)  # short “why it pairs” line from suggestions; shown in Saved looks
     shopping_keywords = Column(String(512))
     image_path = Column(String(512))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

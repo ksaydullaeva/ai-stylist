@@ -1,7 +1,6 @@
 # StyleAI stack: Postgres + FastAPI backend + Vite frontend (nginx).
-# Optional: set GOOGLE_API_KEY in .env for Gemini image generation.
-# Backend uses Ollama on the HOST (not in Docker). Run on host: OLLAMA_HOST=0.0.0.0 ollama serve
-# and pull models: ollama pull qwen2.5vl:3b && ollama pull qwen2.5:3b
+# Set GOOGLE_API_KEY in backend/.env for Gemini (text/vision + image generation).
+# Backend uses Gemini API (see backend/.env for GOOGLE_API_KEY).
 # From repo root: docker compose up --build
 services:
   db:
@@ -33,10 +32,9 @@ services:
               capabilities: [gpu]
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/styleai
-      OLLAMA_HOST: http://ollama-stylist:11434 # to connect to external ollama, use http://host.docker.internal:11434
       HF_TOKEN: ${HF_TOKEN:-}
-      VISION_MODEL: ${VISION_MODEL:-qwen2.5vl:3b}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      VISION_MODEL: ${VISION_MODEL:-gemini-2.5-flash}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
     ports:
@@ -57,26 +55,6 @@ services:
       - "3000:80"
     depends_on:
       - backend
-
-  ollama:
-    image: ollama/ollama
-    container_name: ollama-stylist
-    ports:
-      - "11436:11434"
-    restart: unless-stopped
-    environment:
-      - OLLAMA_KEEP_ALIVE=0        # CRITICAL: Unloads model from RAM immediately after chat
-      - OLLAMA_MAX_LOADED_MODELS=1 # Prevents both Qwen models from being loaded at once
-      - OLLAMA_NUM_PARALLEL=1      # Limits memory used for "thinking" buffers
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-        limits:
-          memory: 16G
 
 volumes:
   postgres_data:

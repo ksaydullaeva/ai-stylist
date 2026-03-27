@@ -21,11 +21,10 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/styleai
-      OLLAMA_HOST: http://host.docker.internal:11434
       HF_TOKEN: ${HF_TOKEN:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      VISION_MODEL: ${VISION_MODEL:-qwen2.5vl:3b}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      VISION_MODEL: ${VISION_MODEL:-gemini-2.5-flash}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

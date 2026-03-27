@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
         with engine.connect() as conn:
             if conn.dialect.name == "postgresql":
                 conn.execute(text("ALTER TABLE outfits ADD COLUMN IF NOT EXISTS try_on_image_path VARCHAR(512)"))
+                conn.execute(text("ALTER TABLE outfit_items ADD COLUMN IF NOT EXISTS enrichment TEXT"))
+            elif conn.dialect.name == "sqlite":
+                rows = conn.execute(text("PRAGMA table_info(outfit_items)")).fetchall()
+                col_names = {r[1] for r in rows}
+                if "enrichment" not in col_names:
+                    conn.execute(text("ALTER TABLE outfit_items ADD COLUMN enrichment TEXT"))
             conn.commit()
     except Exception as e:
         logger.warning(

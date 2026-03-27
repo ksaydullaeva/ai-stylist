@@ -24,9 +24,10 @@ class Settings(BaseSettings):
     # ── External APIs ────────────────────────────────────────────────
     GOOGLE_API_KEY: str = ""
 
-    # ── Local Ollama models ──────────────────────────────────────────
-    VISION_MODEL: str = "qwen2.5vl:3b"
-    LLM_MODEL: str = "qwen2.5:3b"
+    # ── Gemini models (text + vision) ──────────────────────────────────
+    # These are passed to `google.generativeai.GenerativeModel`.
+    VISION_MODEL: str = "gemini-2.5-flash"
+    LLM_MODEL: str = "gemini-2.5-flash"
 
     # ── Storage directories ──────────────────────────────────────────
     UPLOAD_DIR: Path = _BACKEND_DIR / "uploads"
