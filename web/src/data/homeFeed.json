@@ -1,0 +1,79 @@
+{
+  "trending": [
+    {
+      "id": "t1",
+      "tag": "Shopping",
+      "title": "The Playful Makeup Trend is Beauty’s Rebuttal to “Clean Girl” Minimalism",
+      "summary": "From makeup artist Sophie Sinot to Ngozi Esther Edeme, the playful makeup trend is all about experimentation with bold color, jeweled appliqués, and fun finishes.",
+      "detail": "From makeup artist Sophie Sinot to Ngozi Esther Edeme, the playful makeup trend is all about experimentation with bold color, jeweled appliqués, and fun finishes. Originally summarized from Vogue's RSS feed.",
+      "imageUrl": "https://assets.vogue.com/photos/69c2a4d295099c9479d77339/master/pass/03232026_Playful%20makeup%20trend%20holding_v2b.jpg",
+      "imageAlt": "The Playful Makeup Trend is Beauty’s Rebuttal to “Clean Girl” Minimalism",
+      "gradient": "linear-gradient(145deg, #fffbeb 0%, #fde68a 45%, #e7e5e4 100%)"
+    },
+    {
+      "id": "t2",
+      "tag": "Style",
+      "title": "Consumerism Is Back in Fashion—And We’re Actually Not Mad About It",
+      "summary": "As the Spring 2026 designer debut collections hit stores, there’s a newfound frenzy to shop them IRL",
+      "detail": "As the Spring 2026 designer debut collections hit stores, there’s a newfound frenzy to shop them IRL. Originally summarized from Harper's Bazaar's RSS feed.",
+      "imageUrl": "https://hips.hearstapps.com/hmg-prod/images/bc8c83d4-f269-406c-94dc-a14a614b23dd.jpg",
+      "imageAlt": "Consumerism Is Back in Fashion—And We’re Actually Not Mad About It",
+      "gradient": "linear-gradient(160deg, #f8fafc 0%, #cbd5e1 55%, #94a3b8 100%)"
+    },
+    {
+      "id": "t3",
+      "tag": "Denim",
+      "title": "No, Not Blue Jeans—the Elegant Denim Color That's Quietly Taking Over Wardrobes in London and NYC",
+      "summary": "It was only a matter of time.",
+      "detail": "It was only a matter of time. Originally summarized from Who What Wear's RSS feed.",
+      "imageUrl": "https://cdn.mos.cms.futurecdn.net/SZLJXhnbkjTKintG8m3ChT-1280-80.png",
+      "imageAlt": "No, Not Blue Jeans—the Elegant Denim Color That's Quietly Taking Over Wardrobes in London and NYC",
+      "gradient": "linear-gradient(135deg, #faf5f0 0%, #d6c4b8 50%, #a89084 100%)"
+    },
+    {
+      "id": "t4",
+      "tag": "Style",
+      "title": "The Best K-Beauty Deals to Shop During Amazon’s Big Spring Sale",
+      "summary": "Save on Medicube, Biodance, and Mixoon essentials.",
+      "detail": "Save on Medicube, Biodance, and Mixoon essentials. Originally summarized from ELLE's RSS feed.",
+      "imageUrl": "https://hips.hearstapps.com/hmg-prod/images/model-poses-backstage-at-the-sportmax-fashion-show-during-news-photo-1763400450.pjpeg",
+      "imageAlt": "The Best K-Beauty Deals to Shop During Amazon’s Big Spring Sale",
+      "gradient": "linear-gradient(145deg, #fdf4ff 0%, #e9d5ff 40%, #c4b5fd 100%)"
+    }
+  ],
+  "spotlight": [
+    {
+      "id": "s1",
+      "tag": "Shopping",
+      "title": "I’d Never Been Convinced to Try a Color Corrector for Mature Skin Until Now",
+      "summary": "How a new Sarah Creal formula designed to to brighten and neutralize discoloration under the eyes convinced one Vogue writer to try color corrector for mature skin.",
+      "detail": "How a new Sarah Creal formula designed to to brighten and neutralize discoloration under the eyes convinced one Vogue writer to try color corrector for mature skin. Originally summarized from Vogue's RSS feed.",
+      "imageUrl": "https://assets.vogue.com/photos/69c5475d5abc3c489f338256/master/pass/GettyImages-2213323064%20copy.jpg",
+      "imageAlt": "I’d Never Been Convinced to Try a Color Corrector for Mature Skin Until Now",
+      "accent": "#b47456",
+      "gradient": "linear-gradient(180deg, rgba(180,116,86,0.12) 0%, rgba(26,26,26,0.06) 100%)"
+    },
+    {
+      "id": "s2",
+      "tag": "Style",
+      "title": "Something Borrowed! Zendaya Wears Cate Blanchett’s Dress for the Rome Premiere of The Drama",
+      "summary": "She took a break from her bridal whites to take part in a classic wedding tradition",
+      "detail": "She took a break from her bridal whites to take part in a classic wedding tradition. Originally summarized from Harper's Bazaar's RSS feed.",
+      "imageUrl": "https://hips.hearstapps.com/hmg-prod/images/e2002bb6-93e2-4a32-a693-e63953a78835.jpeg",
+      "imageAlt": "Something Borrowed! Zendaya Wears Cate Blanchett’s Dress for the Rome Premiere of The Drama",
+      "accent": "#3b2f2a",
+      "gradient": "linear-gradient(180deg, rgba(59,47,42,0.1) 0%, rgba(248,249,250,0.9) 100%)"
+    },
+    {
+      "id": "s3",
+      "tag": "Style",
+      "title": "How to Style a Boho Dress for Spring 2026",
+      "summary": "Take it from a non-dress person: This style is so versatile.",
+      "detail": "Take it from a non-dress person: This style is so versatile. Originally summarized from Glamour's RSS feed.",
+      "imageUrl": "https://media.glamour.com/photos/69c416ea811cde7a8a17bc8b/master/pass/03.25_GL_How%20to%20Style%20Boho%20Dress_v1.jpg",
+      "imageAlt": "How to Style a Boho Dress for Spring 2026",
+      "accent": "#7c2d12",
+      "gradient": "linear-gradient(165deg, #fff7ed 0%, #fed7aa 55%, #fb923c 100%)"
+    }
+  ]
+}

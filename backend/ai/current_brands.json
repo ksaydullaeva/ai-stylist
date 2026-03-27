@@ -1,0 +1,98 @@
+{
+  "_meta": {
+    "season": "Spring/Summer 2026",
+    "updated": "2026-03-27",
+    "note": "Refresh this file each season. LLM reads it at startup to ground suggestions in current trends."
+  },
+  "silhouettes": {
+    "women": [
+      "oversized blazer over slip dress",
+      "barrel-leg trousers",
+      "asymmetric hem midi skirt",
+      "relaxed linen co-ord sets",
+      "wrap tops with wide-leg pants",
+      "sheer overlay dresses"
+    ],
+    "men": [
+      "relaxed-fit tailored trousers",
+      "boxy linen shirts",
+      "wide-leg cargo pants",
+      "lightweight bomber over tee",
+      "co-ord linen sets",
+      "straight-leg chinos"
+    ],
+    "unisex": [
+      "oversized hoodies",
+      "straight-leg denim",
+      "utility vests",
+      "coach jackets"
+    ]
+  },
+  "color_palettes": {
+    "SS2026": [
+      "Butter Yellow",
+      "Warm Terracotta",
+      "Sage Green",
+      "Dusty Mauve",
+      "Chalk White",
+      "Sand Beige",
+      "Cobalt Blue",
+      "Warm Caramel",
+      "Soft Pistachio",
+      "Ecru"
+    ],
+    "neutrals": ["Ecru", "Warm White", "Oatmeal", "Light Stone", "Soft Charcoal"],
+    "accent": ["Butter Yellow", "Cobalt Blue", "Warm Terracotta"]
+  },
+  "textures_and_fabrics": [
+    "linen",
+    "lightweight denim",
+    "washed cotton",
+    "textured knit",
+    "sheer organza",
+    "leather-look (vegan)",
+    "ribbed jersey"
+  ],
+  "trending_items": {
+    "women": [
+      "barrel-leg jeans",
+      "linen blazer",
+      "platform sandals",
+      "structured tote bag",
+      "mesh ballet flat",
+      "asymmetric midi skirt",
+      "lightweight trench coat"
+    ],
+    "men": [
+      "wide-leg linen trousers",
+      "knit polo shirt",
+      "leather loafers",
+      "canvas tote",
+      "lightweight coach jacket",
+      "boxy graphic tee",
+      "suede derby shoes"
+    ]
+  },
+  "key_brands_by_aesthetic": {
+    "quiet_luxury": ["The Row", "Toteme", "Loro Piana", "Brunello Cucinelli", "Cos"],
+    "contemporary_accessible": ["& Other Stories", "Arket", "Mango", "Sandro", "Reiss"],
+    "streetwear_edge": ["Stussy", "Carhartt WIP", "Daily Paper", "Adidas Originals", "New Balance"],
+    "minimalist_basics": ["Uniqlo", "COS", "Muji", "Everlane"],
+    "elevated_casual": ["Vince", "Theory", "Club Monaco", "J.Crew", "Banana Republic"]
+  },
+  "avoid_trends": [
+    "logomania (large visible logos)",
+    "ultra-mini hemlines for conservative contexts",
+    "neon color-blocking",
+    "chunky dad sneakers (oversaturated)",
+    "micro bags (impractical)"
+  ],
+  "styling_rules_SS2026": [
+    "Mix textures: pair linen with leather or denim.",
+    "Tonal dressing: use 2-3 shades of the same hue for effortless polish.",
+    "One statement piece per outfit; keep the rest understated.",
+    "Prioritise relaxed or wide-leg silhouettes for bottoms.",
+    "Sandals or loafers over sneakers for smart-casual.",
+    "Earth tones and warm neutrals anchor any palette this season."
+  ]
+}

@@ -104,18 +104,17 @@ const LookCard = ({ outfit, api, handleDelete }) => {
                         <div className="item-details-expansion">
                             {selectedItem === 'anchor' ? (
                                 <>
-                                    <span className="look-item-name">{anchorItemLabel}</span>
-                                    <p className="look-item-desc">Based on the item you uploaded.</p>
+                                    <p className="look-item-desc">The anchor for this look.</p>
+                                    <p className="look-item-desc item-details-expansion-secondary">
+                                        Based on the item you uploaded.
+                                    </p>
                                 </>
+                            ) : outfit.items[selectedItem]?.enrichment ? (
+                                <p className="look-item-desc">{outfit.items[selectedItem].enrichment}</p>
                             ) : (
-                                <>
-                                    <span className="look-item-name">
-                                        {outfit.items[selectedItem].color || ''} {outfit.items[selectedItem].type || outfit.items[selectedItem].category || 'Item'}
-                                    </span>
-                                    {outfit.items[selectedItem].enrichment && (
-                                        <p className="look-item-desc">{outfit.items[selectedItem].enrichment}</p>
-                                    )}
-                                </>
+                                <p className="look-item-desc item-details-expansion-empty">
+                                    No extra notes for this piece.
+                                </p>
                             )}
                         </div>
                     )}
@@ -125,7 +124,7 @@ const LookCard = ({ outfit, api, handleDelete }) => {
     );
 };
 
-export default function PastLookbooksPage({ savedOutfits, onBack, onDeleted }) {
+export default function PastLookbooksPage({ savedOutfits, onDeleted }) {
     const handleDelete = async (id, e) => {
         e.stopPropagation();
         if (!window.confirm('Are you sure you want to delete this look?')) return;
@@ -141,9 +140,6 @@ export default function PastLookbooksPage({ savedOutfits, onBack, onDeleted }) {
         <section className="saved-outfits-section">
             <div className="lookbook-header">
                 <div className="lookbook-header-left">
-                    <button type="button" className="btn-back-arrow" onClick={onBack} title="Back">
-                        &larr;
-                    </button>
                     <h2 className="lookbook-title">Saved looks</h2>
                 </div>
                 <div className="lookbook-controls">

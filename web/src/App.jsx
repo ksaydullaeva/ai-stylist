@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { api } from './api'
 import './App.css'
 
@@ -12,8 +12,10 @@ import StudioPage from './pages/StudioPage'
 import LookbookPage from './pages/LookbookPage'
 import PastLookbooksPage from './pages/PastLookbooksPage'
 import LensPage from './pages/LensPage'
+import HomePage from './pages/HomePage'
+import SettingsPage from './pages/SettingsPage'
 
-function BottomNav({ activeTab, onHome, onMatch, onLens }) {
+function BottomNav({ activeTab, onHome, onMatch, onLens, onSaved, onSettings }) {
   return (
     <nav className="bottom-nav" aria-label="Primary">
       <button type="button" className={`bottom-nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={onHome}>
@@ -38,7 +40,13 @@ function BottomNav({ activeTab, onHome, onMatch, onLens }) {
         </svg>
         <span>Lens</span>
       </button>
-      <button type="button" className="bottom-nav-item">
+      <button type="button" className={`bottom-nav-item ${activeTab === 'saved' ? 'active' : ''}`} onClick={onSaved}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+        <span>Saved</span>
+      </button>
+      <button type="button" className={`bottom-nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={onSettings}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <circle cx="12" cy="12" r="3.2" />
           <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.76l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.46V21a2 2 0 1 1-4 0v-.08a1.6 1.6 0 0 0-.97-1.46 1.6 1.6 0 0 0-1.76.32l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.46-.97H3a2 2 0 1 1 0-4h.08a1.6 1.6 0 0 0 1.46-.97 1.6 1.6 0 0 0-.32-1.76l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.6 1.6 0 0 0 1.76.32H8.8a1.6 1.6 0 0 0 .97-1.46V3a2 2 0 1 1 4 0v.08a1.6 1.6 0 0 0 .97 1.46h.01a1.6 1.6 0 0 0 1.76-.32l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.6 1.6 0 0 0-.32 1.76v.01a1.6 1.6 0 0 0 1.46.97H21a2 2 0 1 1 0 4h-.08a1.6 1.6 0 0 0-1.52 1.21" />
@@ -59,8 +67,9 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [backendOk, setBackendOk] = useState(null)
   const [progress, setProgress] = useState(0)
+  const progressTargetRef = useRef(0)
   const [activeTag, setActiveTag] = useState('All')
-  const [activeView, setActiveView] = useState('match') // match | home | lens
+  const [activeView, setActiveView] = useState('match') // home | match | lens | saved | settings
   const [headerOverride, setHeaderOverride] = useState(null)
   const [lensResetKey, setLensResetKey] = useState(0)
 
@@ -73,21 +82,62 @@ export default function App() {
   const [outfitTryOnUrls, setOutfitTryOnUrls] = useState({})
 
   // Saved looks (user chooses which outfits to save for later reference)
-  const [savedOutfitsView, setSavedOutfitsView] = useState(false)
   const [savedOutfits, setSavedOutfits] = useState([])
-  const [savedOutfitsLoading, setSavedOutfitsLoading] = useState(false)
 
   // Phase tracking: 0 = Studio, 1 = Lookbook
   const stage = result ? 1 : 0
 
-  // Load saved looks on mount for the Saved looks page
-  useEffect(() => {
-    let cancelled = false
-    api.getSavedOutfits().then((data) => {
-      if (!cancelled) setSavedOutfits(data.outfits || [])
-    }).catch(() => { if (!cancelled) setSavedOutfits([]) })
-    return () => { cancelled = true }
+  const refreshSavedOutfits = useCallback(async () => {
+    try {
+      const data = await api.getSavedOutfits()
+      setSavedOutfits(data.outfits || [])
+    } catch {
+      setSavedOutfits([])
+    }
   }, [])
+
+  useEffect(() => {
+    refreshSavedOutfits()
+  }, [refreshSavedOutfits])
+
+  const goHome = useCallback(() => {
+    setActiveView('home')
+    setHeaderOverride(null)
+  }, [])
+
+  const goToSavedLooks = useCallback(() => {
+    setActiveView('saved')
+    setHeaderOverride(null)
+    refreshSavedOutfits()
+  }, [refreshSavedOutfits])
+
+  const goToSettings = useCallback(() => {
+    setActiveView('settings')
+    setHeaderOverride(null)
+  }, [])
+
+  // Smooth progress animation: catch up fast to backend checkpoints, drift slowly between them.
+  useEffect(() => {
+    if (!loading) {
+      progressTargetRef.current = 0
+      setProgress(0)
+      return
+    }
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        const target = progressTargetRef.current
+        if (prev < target) {
+          // Fast catch-up: +1% per tick toward the latest backend checkpoint.
+          return Math.min(prev + 1, target)
+        }
+        // Ambient drift: keep the bar visibly moving between checkpoints.
+        // ~0.07%/tick × 70 ms ≈ 1%/s — slow enough to feel honest, alive enough
+        // to feel responsive. Hard-cap at 95 so we never fake 100% before done.
+        return Math.min(prev + 0.07, 95)
+      })
+    }, 70)
+    return () => clearInterval(timer)
+  }, [loading])
 
   const checkBackend = useCallback(async () => {
     try {
@@ -98,23 +148,31 @@ export default function App() {
     }
   }, [])
 
+  const revokeBlobPreview = useCallback((url) => {
+    if (url && typeof url === 'string' && url.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+    }
+  }, [])
+
   const onFileChange = (e) => {
     const f = e.target.files?.[0]
     if (!f) return
     setFile(f)
     setError(null)
-    const reader = new FileReader()
-    reader.onload = () => setPreview(reader.result)
-    reader.readAsDataURL(f)
+    setPreview((prev) => {
+      revokeBlobPreview(prev)
+      return URL.createObjectURL(f)
+    })
   }
 
   const onUserPhotoChange = (e) => {
     const f = e.target.files?.[0]
     if (!f) return
     setUserPhoto(f)
-    const reader = new FileReader()
-    reader.onload = () => setUserPhotoPreview(reader.result)
-    reader.readAsDataURL(f)
+    setUserPhotoPreview((prev) => {
+      revokeBlobPreview(prev)
+      return URL.createObjectURL(f)
+    })
   }
 
   const runPipeline = async () => {
@@ -124,6 +182,7 @@ export default function App() {
     }
     setLoading(true)
     setError(null)
+    progressTargetRef.current = 0
     setProgress(0)
     // Reset pipeline/try-on state so streaming updates render cleanly.
     setResult(null)
@@ -136,7 +195,9 @@ export default function App() {
         file,
         'casual,smart-casual,business casual,date night',
         (percent) => {
-          setProgress(percent)
+          const next = Math.max(0, Math.min(100, Math.round(percent)))
+          // Keep progress monotonic; avoid jumping backwards on late/duplicate events.
+          progressTargetRef.current = Math.max(progressTargetRef.current, next)
         },
         userPhoto,
         // Sent once: all outfit cards (text) are ready.
@@ -215,35 +276,25 @@ export default function App() {
   }
 
   const reset = () => {
+    setPreview((p) => {
+      revokeBlobPreview(p)
+      return null
+    })
+    setUserPhotoPreview((p) => {
+      revokeBlobPreview(p)
+      return null
+    })
     setFile(null)
-    setPreview(null)
     setUserPhoto(null)
-    setUserPhotoPreview(null)
     setResult(null)
     setError(null)
     setTryOnOutfitIndex(null)
     setTryOnResultUrl(null)
     setOutfitTryOnUrls({})
-    setSavedOutfitsView(false)
     setActiveView('match')
-    api.getSavedOutfits().then((data) => setSavedOutfits(data.outfits || [])).catch(() => setSavedOutfits([]))
+    setHeaderOverride(null)
+    refreshSavedOutfits()
   }
-
-  const loadSavedOutfits = useCallback(async () => {
-    setSavedOutfitsLoading(true)
-    try {
-      const data = await api.getSavedOutfits()
-      setSavedOutfits(data.outfits || [])
-      setSavedOutfitsView(true)
-      setActiveView('home')
-    } catch {
-      setSavedOutfits([])
-      setSavedOutfitsView(true)
-      setActiveView('home')
-    } finally {
-      setSavedOutfitsLoading(false)
-    }
-  }, [])
 
   const styleTags = useMemo(() => {
     if (!result?.outfits?.outfits) return ['All']
@@ -260,6 +311,41 @@ export default function App() {
     return result.outfits.outfits.filter(o => o.occasion === activeTag)
   }, [result, activeTag])
 
+  const computedHeader = useMemo(() => {
+    // Lens manages its own header (upload/results/map) via onHeader.
+    if (activeView === 'lens') return null
+
+    if (activeView === 'saved') {
+      return {
+        title: 'Your Style Vault',
+        tagline: 'Saved looks you can revisit, remix, and re-wear anytime.',
+      }
+    }
+
+    if (activeView === 'home') {
+      return {}
+    }
+
+    if (activeView === 'settings') {
+      return {
+        title: 'Settings',
+      }
+    }
+
+    // Match flow: stage 0 = upload/validate, stage 1 = lookbook results
+    if (stage === 0) {
+      return {
+        title: 'Style Matchmaker',
+        tagline: 'Drop one piece. We’ll build the whole look—fast, flattering, and you.',
+      }
+    }
+
+    return {
+      title: 'Your Lookbook',
+      tagline: 'Swipe-worthy outfits, stylist notes, and virtual try-on—pick your favorite and save it.',
+    }
+  }, [activeView, stage])
+
   return (
     <div className="app">
       <LoadingOverlay loading={loading} progress={progress} />
@@ -274,19 +360,22 @@ export default function App() {
 
       <Header
         backendOk={backendOk}
-        title={headerOverride?.title}
-        tagline={headerOverride?.tagline}
+        title={(activeView === 'lens' ? headerOverride?.title : computedHeader?.title) || undefined}
+        tagline={(activeView === 'lens' ? headerOverride?.tagline : computedHeader?.tagline) || undefined}
       />
 
       <main>
         {activeView === 'lens' ? (
           <LensPage key={lensResetKey} onHeader={setHeaderOverride} />
-        ) : savedOutfitsView ? (
+        ) : activeView === 'saved' ? (
           <PastLookbooksPage
             savedOutfits={savedOutfits}
-            onBack={() => { setSavedOutfitsView(false); setActiveView('match') }}
-            onDeleted={loadSavedOutfits}
+            onDeleted={refreshSavedOutfits}
           />
+        ) : activeView === 'home' ? (
+          <HomePage />
+        ) : activeView === 'settings' ? (
+          <SettingsPage />
         ) : stage === 0 ? (
           <StudioPage
             preview={preview}
@@ -294,8 +383,20 @@ export default function App() {
             userPhoto={userPhoto}
             onFileChange={onFileChange}
             onUserPhotoChange={onUserPhotoChange}
-            onRemoveItem={() => { setFile(null); setPreview(null); }}
-            onRemoveUserPhoto={() => { setUserPhoto(null); setUserPhotoPreview(null); }}
+            onRemoveItem={() => {
+              setFile(null)
+              setPreview((p) => {
+                revokeBlobPreview(p)
+                return null
+              })
+            }}
+            onRemoveUserPhoto={() => {
+              setUserPhoto(null)
+              setUserPhotoPreview((p) => {
+                revokeBlobPreview(p)
+                return null
+              })
+            }}
             runPipeline={runPipeline}
             loading={loading}
             file={file}
@@ -308,9 +409,6 @@ export default function App() {
             styleTags={styleTags}
             activeTag={activeTag}
             setActiveTag={setActiveTag}
-            loadSavedOutfits={loadSavedOutfits}
-            savedOutfitsLoading={savedOutfitsLoading}
-            reset={reset}
             runTryOn={runTryOn}
             outfitTryOnUrls={outfitTryOnUrls}
             filteredOutfits={filteredOutfits}
@@ -320,14 +418,15 @@ export default function App() {
 
       <BottomNav
         activeTab={activeView}
-        onHome={loadSavedOutfits}
+        onHome={goHome}
         onMatch={reset}
         onLens={() => {
-          setSavedOutfitsView(false)
           setHeaderOverride(null)
           setLensResetKey((k) => k + 1)
           setActiveView('lens')
         }}
+        onSaved={goToSavedLooks}
+        onSettings={goToSettings}
       />
 
     </div>

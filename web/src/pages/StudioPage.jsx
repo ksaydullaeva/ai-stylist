@@ -30,6 +30,9 @@ export default function StudioPage({
 }) {
     const hasItem = !!file;
     const hasModel = !!userPhoto;
+    const [itemStepConfirmed, setItemStepConfirmed] = useState(false);
+    /** User must confirm full-body preview before we run step 3 (API validation). */
+    const [fullBodyConfirmed, setFullBodyConfirmed] = useState(false);
 
     const [validatingItem, setValidatingItem] = useState(false);
     const [validatingUser, setValidatingUser] = useState(false);
@@ -41,43 +44,53 @@ export default function StudioPage({
     // Reset validations when the corresponding upload changes
     useEffect(() => {
         setItemValidation(null);
+        setItemStepConfirmed(false);
     }, [file]);
 
     useEffect(() => {
         setUserValidation(null);
     }, [userPhoto]);
 
-    // Step 1 validation only (runs only when item + full-body photo exist).
-    // This prevents re-validating Step 2 when you change only the item.
     useEffect(() => {
-        if (!file || !userPhoto) return;
+        setFullBodyConfirmed(false);
+    }, [file, userPhoto]);
+
+    // Step 1 validation only (runs only when item + full-body photo exist).
+    // Both setItemValidation and setValidatingItem are called inside the same
+    // .then()/.catch() callback so React 18 batches them into one render —
+    // preventing a window where validatedPair is true but validating is still true.
+    useEffect(() => {
+        if (!file || !userPhoto || !fullBodyConfirmed) return;
         if (validatingItem) return;
         setValidatingItem(true);
         api.validateItem(file)
-            .then((res) => setItemValidation(res))
-            .catch(() => setItemValidation({
-                item_ok: false,
-                item_error: 'validation_failed',
-                item_message: 'Validation failed.'
-            }))
-            .finally(() => setValidatingItem(false));
-    }, [file, userPhoto]);
+            .then((res) => { setItemValidation(res); setValidatingItem(false); })
+            .catch(() => {
+                setItemValidation({
+                    item_ok: false,
+                    item_error: 'validation_failed',
+                    item_message: 'Validation failed.',
+                });
+                setValidatingItem(false);
+            });
+    }, [file, userPhoto, fullBodyConfirmed]);
 
     // Step 2 validation only (runs when the full-body photo changes).
-    // This prevents re-validating Step 2 when you change only the item.
     useEffect(() => {
-        if (!userPhoto) return;
+        if (!userPhoto || !fullBodyConfirmed) return;
         if (validatingUser) return;
         setValidatingUser(true);
         api.validateUserPhoto(userPhoto)
-            .then((res) => setUserValidation(res))
-            .catch(() => setUserValidation({
-                user_ok: false,
-                user_error: 'validation_failed',
-                user_message: 'Validation failed.'
-            }))
-            .finally(() => setValidatingUser(false));
-    }, [userPhoto]);
+            .then((res) => { setUserValidation(res); setValidatingUser(false); })
+            .catch(() => {
+                setUserValidation({
+                    user_ok: false,
+                    user_error: 'validation_failed',
+                    user_message: 'Validation failed.',
+                });
+                setValidatingUser(false);
+            });
+    }, [userPhoto, fullBodyConfirmed]);
 
     const handleSkip = async () => {
         if (!file || validating) return;
@@ -97,12 +110,6 @@ export default function StudioPage({
         }
     };
 
-    const handleBackToItemStep = () => {
-        // "Back" from Step 2 (waiting on full-body photo) -> Step 1 (clothing item upload).
-        if (loading || validating) return;
-        onRemoveItem();
-    };
-
     const validatedItem = itemValidation && itemValidation.item_ok;
     const validatedUser = userValidation && userValidation.user_ok;
     const validatedPair = hasItem && hasModel && validatedItem && validatedUser;
@@ -112,18 +119,36 @@ export default function StudioPage({
     const userFailedPair = userValidation && hasItem && hasModel && !userValidation.user_ok;
     const swapLikely = itemFailedPair && userFailedPair;
     const validationFailed = hasItem && hasModel && itemValidation && userValidation && !validatedPair;
-    const showPairedPreview = hasItem && hasModel && validatedPair;
+    const showPairedPreview = hasItem && hasModel && validatedPair && !validating;
     const canCreate = hasItem && !validating && (!hasModel || validatedPair);
     const checkingDone = validatedPair;
-    const activeStep = !hasItem ? 1 : (validating || checkingDone) ? 3 : 2;
+    const activeStep = !hasItem
+        ? 1
+        : !itemStepConfirmed
+          ? 1
+          : !hasModel
+            ? 2
+            : !fullBodyConfirmed
+              ? 2
+              : validating || checkingDone
+                ? 3
+                : 2;
 
     // Each step is independently done based on its own data, not just activeStep position.
     // This means clicking "Change" on one step leaves the other steps' indicators untouched.
     // While validating, avoid showing step "done" checkmarks early (parallel async validations).
     // Only show "done" after validation completes for the relevant step.
-    const step1Done = hasItem && (!hasModel ? true : !validating && !!itemValidation?.item_ok);
-    const step2Done = (!hasModel && activeStep >= 3) || (hasModel && !validating && !!userValidation?.user_ok);
+    const step1Done =
+        hasItem &&
+        (!hasModel ? true : !fullBodyConfirmed ? true : !validating && !!itemValidation?.item_ok);
     const step3Done = checkingDone;
+    // step2Done must be in sync with step3Done: if checking passed, step 2 is certainly done.
+    // Deriving step2Done from checkingDone prevents a render where step3 shows ✓ but step2 still
+    // shows the number (state variables for step2 settle in the same React batch as checkingDone).
+    const step2Done =
+        checkingDone ||
+        (!hasModel && activeStep >= 3) ||
+        (hasModel && fullBodyConfirmed && !validating && !!userValidation?.user_ok);
 
     return (
         <section className="studio-container studio-container-sequential tcm-studio-shell">
@@ -143,7 +168,7 @@ export default function StudioPage({
                     </div>
                 </div>
 
-                {validating && hasItem && (
+                {validating && hasItem && !hasModel && (
                     <div className="upload-validating tcm-checking-state">
                         <div className="upload-validating-icons">
                             <span className="upload-validating-icon upload-validating-icon-item">
@@ -156,6 +181,66 @@ export default function StudioPage({
                         <span className="upload-validating-text">Checking your photos</span>
                         <span className="upload-validating-dots">...</span>
                         <div className="upload-validating-bar" />
+                    </div>
+                )}
+
+                {validating && hasItem && hasModel && (
+                    <div className="upload-validating tcm-checking-state">
+                        <div className="upload-validating-icons">
+                            <span className="upload-validating-icon upload-validating-icon-item">
+                                <img className="upload-validating-icon-img" src="/icons/clothing-upload.png" alt="" />
+                            </span>
+                            <span className="upload-validating-icon upload-validating-icon-model">
+                                <PersonIcon />
+                            </span>
+                        </div>
+                        <span className="upload-validating-text">Checking your photos</span>
+                        <span className="upload-validating-dots">...</span>
+                        <div className="upload-validating-bar" />
+                    </div>
+                )}
+
+                {/* Step 2 review: only the full-body upload (same single-card pattern as step 1). Next → checking (step 3). */}
+                {!validating && !showPairedPreview && hasItem && hasModel && userPhotoPreview && !fullBodyConfirmed && (
+                    <>
+                        <div className="studio-image-block tcm-preview-card tcm-single-preview">
+                            <div className="studio-image-wrap">
+                                <img src={userPhotoPreview} alt="Your full-body photo" className="studio-image-img" />
+                            </div>
+                            <button type="button" className="upload-received-change tcm-change-btn" onClick={onRemoveUserPhoto}>
+                                <ChangeIcon /> Change
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn-primary tcm-main-btn"
+                            onClick={() => setFullBodyConfirmed(true)}
+                            disabled={loading || validating}
+                        >
+                            Next
+                        </button>
+                    </>
+                )}
+
+                {/* After confirm: both previews when not in the active API check (pair shown here or on Create step after checks pass). */}
+                {!validating && !showPairedPreview && hasItem && hasModel && preview && userPhotoPreview && fullBodyConfirmed && (
+                    <div className="studio-images-side-by-side tcm-preview-grid">
+                        <div className="studio-image-block tcm-preview-card">
+                            <div className="studio-image-wrap">
+                                <img src={preview} alt="Your item" className="studio-image-img" />
+                            </div>
+                            <button type="button" className="upload-received-change tcm-change-btn" onClick={onRemoveItem}>
+                                <ChangeIcon /> Change
+                            </button>
+                        </div>
+                        <div className="studio-image-block tcm-preview-card">
+                            <div className="studio-image-wrap">
+                                <img src={userPhotoPreview} alt="Your full-body photo" className="studio-image-img" />
+                            </div>
+                            <button type="button" className="upload-received-change tcm-change-btn" onClick={onRemoveUserPhoto}>
+                                <ChangeIcon /> Change
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -176,19 +261,29 @@ export default function StudioPage({
                     </>
                 )}
 
-                {!validating && !showPairedPreview && hasItem && !hasModel && (
+                {!validating && !showPairedPreview && hasItem && !hasModel && !itemStepConfirmed && (
                     <>
-                        <div style={{ width: '100%', maxWidth: 500, display: 'flex', justifyContent: 'flex-start' }}>
-                            <button
-                                type="button"
-                                className="btn-back-arrow"
-                                onClick={handleBackToItemStep}
-                                aria-label="Back to Clothing Item step"
-                                disabled={loading || validating}
-                            >
-                                &larr;
+                        <div className="studio-image-block tcm-preview-card tcm-single-preview">
+                            <div className="studio-image-wrap">
+                                <img src={preview} alt="Your item" className="studio-image-img" />
+                            </div>
+                            <button type="button" className="upload-received-change tcm-change-btn" onClick={onRemoveItem}>
+                                <ChangeIcon /> Change
                             </button>
                         </div>
+                        <button
+                            className="btn-primary tcm-main-btn"
+                            type="button"
+                            onClick={() => setItemStepConfirmed(true)}
+                            disabled={loading || validating}
+                        >
+                            Next
+                        </button>
+                    </>
+                )}
+
+                {!validating && !showPairedPreview && hasItem && !hasModel && itemStepConfirmed && (
+                    <>
                         {itemFailedNoModel && itemValidation?.item_message && (
                             <div className="banner error" style={{ width: '100%', marginBottom: 0 }}>{itemValidation.item_message}</div>
                         )}
@@ -210,44 +305,69 @@ export default function StudioPage({
                 )}
 
                 {!validating && !showPairedPreview && hasItem && hasModel && validationFailed && (itemFailedPair || userFailedPair) && (
-                    <div className="upload-received">
-                        {swapLikely && (
-                            <p className="banner error" style={{ marginBottom: 8 }}>
-                                Your uploads look swapped/reversed. Please upload the garment/product image for <b>Clothing Item</b> (Step 1)
-                                and your full-body photo for <b>Full-body Image</b> (Step 2).
-                            </p>
-                        )}
-                        {itemFailedPair && itemValidation?.item_message && (
-                            <p className="banner error" style={{ marginBottom: 8 }}>{itemValidation.item_message}</p>
-                        )}
-                        {userFailedPair && userValidation?.user_message && (
-                            <p className="banner error" style={{ marginBottom: 8 }}>
-                                {userValidation.user_message}
-                            </p>
-                        )}
-                        {itemFailedPair && (
-                            <div className="dropzone tcm-dropzone" onClick={() => document.getElementById('item-input').click()}>
-                                <input id="item-input" type="file" className="hidden" accept="image/*" onChange={onFileChange} />
-                                <img className="dropzone-icon" src="/icons/clothing-upload.png" alt="" />
-                                <span className="dropzone-text">Drop the item you want to style.</span>
-                                <span className="tcm-dropzone-hint">
-                                    Upload a photo where only ONE garment is visible (not a full outfit). Use a plain background, good lighting, and make sure the full garment is visible.
-                                </span>
-                                <span className="tcm-dropzone-hint">JPEG, JPG, and PNG formats, up to 5 MB</span>
+                    swapLikely ? (
+                        /* Both photos failed — most likely they're swapped */
+                        <div className="tcm-val-error-card">
+                            <div className="tcm-val-error-swap-thumbs">
+                                <div className="tcm-val-error-thumb-wrap">
+                                    <span className="tcm-val-error-step-badge">Step 1</span>
+                                    <img src={preview} alt="Uploaded item" className="tcm-val-error-thumb" />
+                                </div>
+                                <span className="tcm-val-error-swap-arrow" aria-hidden>⇄</span>
+                                <div className="tcm-val-error-thumb-wrap">
+                                    <span className="tcm-val-error-step-badge">Step 2</span>
+                                    <img src={userPhotoPreview} alt="Uploaded photo" className="tcm-val-error-thumb" />
+                                </div>
                             </div>
-                        )}
-                        {userFailedPair && (
-                            <div className="dropzone tcm-dropzone" onClick={() => document.getElementById('user-input').click()}>
-                                <input id="user-input" type="file" className="hidden" accept="image/*" onChange={onUserPhotoChange} />
-                                <PersonIcon />
-                                <span className="dropzone-text">Drop a full-body photo of yourself.</span>
-                                <span className="tcm-dropzone-hint">
-                                    Head-to-toe only, face visible, stand straight. Please remove coats/heavy winter layers.
-                                </span>
-                                <span className="tcm-dropzone-hint">JPEG, JPG, and PNG formats, up to 5 MB</span>
+                            <p className="tcm-val-error-title">Your photos look swapped</p>
+                            <p className="tcm-val-error-body">
+                                Step 1 needs a <strong>garment photo</strong> (plain background, one item).<br />
+                                Step 2 needs a <strong>full-body photo of you</strong> (head-to-toe).
+                            </p>
+                            <div className="tcm-val-error-actions">
+                                <button className="btn-primary tcm-main-btn" type="button" onClick={onRemoveItem}>
+                                    Replace clothing item
+                                </button>
+                                <button className="btn-secondary tcm-main-btn" type="button" onClick={onRemoveUserPhoto}>
+                                    Replace your photo
+                                </button>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    ) : itemFailedPair ? (
+                        /* Step 1 (clothing item) failed */
+                        <div className="tcm-val-error-card">
+                            <div className="tcm-val-error-thumb-wrap">
+                                <span className="tcm-val-error-step-badge">Step 1 — Clothing Item</span>
+                                <img src={preview} alt="Uploaded item" className="tcm-val-error-thumb" />
+                            </div>
+                            <p className="tcm-val-error-title">
+                                {itemValidation?.item_message || "We couldn't identify a clothing item in this photo."}
+                            </p>
+                            <p className="tcm-val-error-body">
+                                Use a photo of a <strong>single garment</strong> on a plain background with the full item visible.
+                            </p>
+                            <button className="btn-primary tcm-main-btn" type="button" onClick={onRemoveItem}>
+                                Replace clothing item
+                            </button>
+                        </div>
+                    ) : (
+                        /* Step 2 (full-body photo) failed */
+                        <div className="tcm-val-error-card">
+                            <div className="tcm-val-error-thumb-wrap">
+                                <span className="tcm-val-error-step-badge">Step 2 — Full-body Image</span>
+                                <img src={userPhotoPreview} alt="Uploaded photo" className="tcm-val-error-thumb" />
+                            </div>
+                            <p className="tcm-val-error-title">
+                                {userValidation?.user_message || "We couldn't verify this as a full-body photo."}
+                            </p>
+                            <p className="tcm-val-error-body">
+                                Stand <strong>head-to-toe</strong>, face visible, on a clear background. Remove heavy coats or layers.
+                            </p>
+                            <button className="btn-primary tcm-main-btn" type="button" onClick={onRemoveUserPhoto}>
+                                Replace your photo
+                            </button>
+                        </div>
+                    )
                 )}
 
                 {showPairedPreview && (

@@ -310,6 +310,13 @@ export const api = {
     }
   },
 
+  /** GET /api/v1/home-trend-feed — Home trend cards (static JSON from the backend) */
+  async homeTrendFeed() {
+    const res = await fetch(`${getBase()}/api/v1/home-trend-feed`);
+    if (!res.ok) throw new Error('Home feed failed');
+    return res.json();
+  },
+
   /** POST /api/v1/lens/search — find similar Zara items by image embeddings */
   async lensSearch(imageFile, n = 12, zaraCategory = null) {
     const form = new FormData();
